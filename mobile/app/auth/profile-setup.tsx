@@ -1,21 +1,38 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
+import { authApi } from '../../utils/api';
+import { SPECIES_LIST } from '../../utils/constants';
 
 export default function ProfileSetup() {
   const router = useRouter();
+  const { phone } = useLocalSearchParams<{ phone: string }>();
   const [name, setName] = useState('');
   const [district, setDistrict] = useState('');
   const [village, setVillage] = useState('');
   const [species, setSpecies] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const canSubmit = name && district && species;
 
-  const handleComplete = () => {
-    if (canSubmit) {
+  const handleComplete = async () => {
+    if (!canSubmit || !phone) return;
+    setLoading(true);
+    try {
+      await authApi.register({
+        phone,
+        full_name: name,
+        district,
+        village,
+        primary_species: species,
+      });
       router.replace('/(tabs)/home');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Registration failed. Try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -79,22 +96,25 @@ export default function ProfileSetup() {
 
             <View style={s.field}>
               <Text style={s.label}>Primary Species *</Text>
-              <TextInput
-                style={s.input}
-                placeholder="e.g. Shrimp, Rohu, Catla"
-                placeholderTextColor={theme.colors.textLight}
-                value={species}
-                onChangeText={setSpecies}
-                returnKeyType="done"
-              />
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
+                {SPECIES_LIST.map((sp) => (
+                  <TouchableOpacity
+                    key={sp}
+                    style={[s.chip, species === sp && s.chipActive]}
+                    onPress={() => setSpecies(sp)}
+                  >
+                    <Text style={[s.chipText, species === sp && s.chipTextActive]}>{sp}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
 
             <TouchableOpacity
-              style={[s.btn, !canSubmit && s.btnDisabled]}
+              style={[s.btn, (!canSubmit || loading) && s.btnDisabled]}
               onPress={handleComplete}
-              disabled={!canSubmit}
+              disabled={!canSubmit || loading}
             >
-              <Text style={s.btnText}>Complete Setup</Text>
+              <Text style={s.btnText}>{loading ? 'Setting up...' : 'Complete Setup'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -157,6 +177,31 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     fontSize: 15,
     color: theme.colors.text,
+  },
+  chipRow: {
+    flexDirection: 'row',
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: theme.colors.background,
+    marginRight: 8,
+    borderWidth: 1.5,
+    borderColor: theme.colors.border,
+  },
+  chipActive: {
+    backgroundColor: theme.colors.primary,
+    borderColor: theme.colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: theme.colors.text,
+  },
+  chipTextActive: {
+    color: '#FFF',
+    fontWeight: '600',
   },
   btn: {
     backgroundColor: theme.colors.primary,

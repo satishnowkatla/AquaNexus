@@ -2,17 +2,31 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '../utils/theme';
+import { tokenStore } from '../utils/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../utils/constants';
 
 export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
-    // Show splash for 2 seconds, then go to onboarding
-    const timer = setTimeout(() => {
-      router.replace('/onboarding');
-    }, 2000);
+    const init = async () => {
+      const [token, onboardingDone] = await Promise.all([
+        tokenStore.get(),
+        AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE),
+      ]);
 
-    return () => clearTimeout(timer);
+      await new Promise(r => setTimeout(r, 2000));
+
+      if (token) {
+        router.replace('/(tabs)/home');
+      } else if (onboardingDone) {
+        router.replace('/auth/login');
+      } else {
+        router.replace('/onboarding');
+      }
+    };
+    init();
   }, []);
 
   return (

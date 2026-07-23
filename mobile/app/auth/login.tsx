@@ -1,16 +1,25 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
+import { authApi } from '../../utils/api';
 
 export default function Login() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSendOTP = () => {
-    if (phone.length === 10) {
-      router.push('/auth/otp-verify');
+  const handleSendOTP = async () => {
+    if (phone.length !== 10) return;
+    setLoading(true);
+    try {
+      await authApi.sendOtp(phone);
+      router.push({ pathname: '/auth/otp-verify', params: { phone } });
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to send OTP. Try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -58,11 +67,11 @@ export default function Login() {
             )}
 
             <TouchableOpacity
-              style={[s.btn, phone.length !== 10 && s.btnDisabled]}
+              style={[s.btn, (phone.length !== 10 || loading) && s.btnDisabled]}
               onPress={handleSendOTP}
-              disabled={phone.length !== 10}
+              disabled={phone.length !== 10 || loading}
             >
-              <Text style={s.btnText}>Continue</Text>
+              <Text style={s.btnText}>{loading ? 'Sending...' : 'Continue'}</Text>
             </TouchableOpacity>
 
             <Text style={s.terms}>

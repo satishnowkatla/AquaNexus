@@ -1,16 +1,43 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
+import { authApi, tokenStore } from '../../utils/api';
 
 export default function OTPVerify() {
   const router = useRouter();
+  const { phone } = useLocalSearchParams<{ phone: string }>();
   const [otp, setOtp] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleVerify = () => {
-    if (otp.length === 6) {
-      router.replace('/auth/profile-setup');
+  const maskedPhone = phone ? `+91 ${phone.slice(0, 5)} ${phone.slice(5)}` : '+91 XXXXX XXXXX';
+
+  const handleVerify = async () => {
+    if (otp.length !== 6 || !phone) return;
+    setLoading(true);
+    try {
+      const { token, user, isNewUser } = await authApi.verifyOtp(phone, otp);
+      await tokenStore.save(token);
+      if (isNewUser) {
+        router.replace({ pathname: '/auth/profile-setup', params: { phone } });
+      } else {
+        router.replace('/(tabs)/home');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Invalid OTP. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!phone) return;
+    try {
+      await authApi.sendOtp(phone);
+      Alert.alert('OTP Sent', 'A new OTP has been sent to your number.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to resend OTP.');
     }
   };
 
@@ -33,7 +60,7 @@ export default function OTPVerify() {
             </View>
             <Text style={s.title}>Verification</Text>
             <Text style={s.subtitle}>
-              Enter the 6-digit code sent to{'\n'}+91 98765 43210
+              Enter the 6-digit code sent to{'\n'}{maskedPhone}
             </Text>
           </View>
 
@@ -55,14 +82,14 @@ export default function OTPVerify() {
             )}
 
             <TouchableOpacity
-              style={[s.btn, otp.length !== 6 && s.btnDisabled]}
+              style={[s.btn, (otp.length !== 6 || loading) && s.btnDisabled]}
               onPress={handleVerify}
-              disabled={otp.length !== 6}
+              disabled={otp.length !== 6 || loading}
             >
-              <Text style={s.btnText}>Verify</Text>
+              <Text style={s.btnText}>{loading ? 'Verifying...' : 'Verify'}</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.resend}>
+            <TouchableOpacity style={s.resend} onPress={handleResend}>
               <Text style={s.resendText}>Resend OTP</Text>
             </TouchableOpacity>
           </View>

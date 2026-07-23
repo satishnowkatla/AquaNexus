@@ -1,7 +1,9 @@
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme } from '../../utils/theme';
+import { STORAGE_KEYS } from '../../utils/constants';
 
 export default function Onboarding() {
   const router = useRouter();
@@ -25,14 +27,20 @@ export default function Onboarding() {
         <View style={s.buttons}>
           <TouchableOpacity
             style={s.primaryBtn}
-            onPress={() => router.replace('/auth/login')}
+            onPress={async () => {
+              await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_DONE, 'true');
+              router.replace('/auth/login');
+            }}
           >
             <Text style={s.primaryText}>Get Started</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={s.secondaryBtn}
-            onPress={() => router.replace('/auth/login')}
+            onPress={async () => {
+              await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_DONE, 'true');
+              router.replace('/auth/login');
+            }}
           >
             <Text style={s.secondaryText}>I already have an account</Text>
           </TouchableOpacity>
