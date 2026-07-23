@@ -7,8 +7,10 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="onboarding" />
-        <Stack.Screen name="auth" />
+        <Stack.Screen name="onboarding/index" />
+        <Stack.Screen name="auth/login" />
+        <Stack.Screen name="auth/otp-verify" />
+        <Stack.Screen name="auth/profile-setup" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="aquadoc" />
         <Stack.Screen name="aquavoice" />
