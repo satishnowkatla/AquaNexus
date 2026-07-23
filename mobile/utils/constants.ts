@@ -1,4 +1,4 @@
-export const API_URL = 'http://localhost:3000';
+export const API_URL = 'http://10.5.14.137:3000';
 export const API_URLS = {
   BASE: API_URL,
   AQUADOC: `${API_URL}/api/aquadoc`,
