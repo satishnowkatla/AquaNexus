@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '../utils/theme';
-import { tokenStore } from '../utils/api';
+import { supabase } from '../utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../utils/constants';
 
@@ -11,14 +11,14 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
-      const [token, onboardingDone] = await Promise.all([
-        tokenStore.get(),
+      const [session, onboardingDone] = await Promise.all([
+        supabase.auth.getSession(),
         AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE),
       ]);
 
       await new Promise(r => setTimeout(r, 2000));
 
-      if (token) {
+      if (session.data.session) {
         router.replace('/(tabs)/home');
       } else if (onboardingDone) {
         router.replace('/auth/login');

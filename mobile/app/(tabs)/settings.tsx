@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { theme } from '../../utils/theme';
 import { LANGUAGE_OPTIONS, APP_VERSION, APP_TAGLINE } from '../../utils/mockData';
 import { tokenStore } from '../../utils/api';
+import { supabase } from '../../utils/supabase';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -15,7 +16,7 @@ export default function SettingsScreen() {
   const logout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => { await tokenStore.clear(); router.replace('/onboarding'); } },
+      { text: 'Logout', style: 'destructive', onPress: async () => { await supabase.auth.signOut(); router.replace('/onboarding'); } },
     ]);
   };
 

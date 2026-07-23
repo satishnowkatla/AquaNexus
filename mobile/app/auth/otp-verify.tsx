@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingVi
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
-import { authApi, tokenStore } from '../../utils/api';
+import { supabase } from '../../utils/supabase';
 
 export default function OTPVerify() {
   const router = useRouter();
@@ -17,12 +17,17 @@ export default function OTPVerify() {
     if (otp.length !== 6 || !phone) return;
     setLoading(true);
     try {
-      const { token, user, isNewUser } = await authApi.verifyOtp(phone, otp);
-      await tokenStore.save(token);
-      if (isNewUser) {
-        router.replace({ pathname: '/auth/profile-setup', params: { phone } });
-      } else {
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: `+91${phone}`,
+        token: otp,
+        type: 'sms',
+      });
+      if (error) throw error;
+
+      if (data.session) {
         router.replace('/(tabs)/home');
+      } else {
+        router.replace({ pathname: '/auth/profile-setup', params: { phone } });
       }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Invalid OTP. Try again.');
@@ -34,7 +39,8 @@ export default function OTPVerify() {
   const handleResend = async () => {
     if (!phone) return;
     try {
-      await authApi.sendOtp(phone);
+      const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` });
+      if (error) throw error;
       Alert.alert('OTP Sent', 'A new OTP has been sent to your number.');
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to resend OTP.');

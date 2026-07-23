@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Keyboa
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
-import { authApi } from '../../utils/api';
+import { supabase } from '../../utils/supabase';
 import { SPECIES_LIST } from '../../utils/constants';
 
 export default function ProfileSetup() {
@@ -21,13 +21,19 @@ export default function ProfileSetup() {
     if (!canSubmit || !phone) return;
     setLoading(true);
     try {
-      await authApi.register({
-        phone,
-        full_name: name,
-        district,
-        village,
-        primary_species: species,
-      });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not logged in');
+
+      const { error: userError } = await supabase
+        .from('users')
+        .upsert({ id: user.id, phone, full_name: name }, { onConflict: 'id' });
+      if (userError) throw userError;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({ user_id: user.id, district, village, primary_species: species }, { onConflict: 'user_id' });
+      if (profileError) throw profileError;
+
       router.replace('/(tabs)/home');
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Registration failed. Try again.');
@@ -58,8 +64,7 @@ export default function ProfileSetup() {
           </View>
 
           <View style={s.bottom}>
-            <View style={s.field}>
-              <Text style={s.label}>Full Name *</Text>
+            <Field label="Full Name *">
               <TextInput
                 style={s.input}
                 placeholder="Enter your name"
@@ -68,10 +73,9 @@ export default function ProfileSetup() {
                 onChangeText={setName}
                 returnKeyType="next"
               />
-            </View>
+            </Field>
 
-            <View style={s.field}>
-              <Text style={s.label}>District *</Text>
+            <Field label="District *">
               <TextInput
                 style={s.input}
                 placeholder="e.g. East Godavari"
@@ -80,10 +84,9 @@ export default function ProfileSetup() {
                 onChangeText={setDistrict}
                 returnKeyType="next"
               />
-            </View>
+            </Field>
 
-            <View style={s.field}>
-              <Text style={s.label}>Village</Text>
+            <Field label="Village">
               <TextInput
                 style={s.input}
                 placeholder="Enter your village"
@@ -92,10 +95,9 @@ export default function ProfileSetup() {
                 onChangeText={setVillage}
                 returnKeyType="next"
               />
-            </View>
+            </Field>
 
-            <View style={s.field}>
-              <Text style={s.label}>Primary Species *</Text>
+            <Field label="Primary Species *">
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
                 {SPECIES_LIST.map((sp) => (
                   <TouchableOpacity
@@ -107,7 +109,7 @@ export default function ProfileSetup() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-            </View>
+            </Field>
 
             <TouchableOpacity
               style={[s.btn, (!canSubmit || loading) && s.btnDisabled]}
@@ -120,6 +122,15 @@ export default function ProfileSetup() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.text, marginBottom: 8 }}>{label}</Text>
+      {children}
+    </View>
   );
 }
 
@@ -159,15 +170,6 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   bottom: {},
-  field: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.colors.text,
-    marginBottom: 8,
-  },
   input: {
     backgroundColor: theme.colors.background,
     borderRadius: 14,
