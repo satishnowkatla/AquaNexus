@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { theme } from '../../utils/theme';
+import { MODULE_COLOR_MAP } from '../../utils/moduleConfig';
 
 interface ChatBubbleProps {
   message: string;
@@ -60,8 +62,8 @@ const ChatBubble: React.FC<ChatBubbleProps> = ({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    marginBottom: 12,
-    paddingHorizontal: 16,
+    marginBottom: theme.spacing.sm + 4,
+    paddingHorizontal: theme.spacing.md,
   },
   userRow: {
     justifyContent: 'flex-end',
@@ -70,53 +72,53 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#1E88E5',
+    width: theme.layout.avatarSm,
+    height: theme.layout.avatarSm,
+    borderRadius: theme.layout.avatarSm / 2,
+    backgroundColor: MODULE_COLOR_MAP.aquaadvisor,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: theme.spacing.sm,
     marginTop: 4,
   },
   avatarText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.xs,
     fontWeight: '700',
   },
   bubble: {
     maxWidth: '75%',
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: theme.borderRadius.xl,
+    padding: theme.spacing.sm + 4,
   },
   userBubble: {
-    backgroundColor: '#1E88E5',
-    borderBottomRightRadius: 4,
+    backgroundColor: MODULE_COLOR_MAP.aquaadvisor,
+    borderBottomRightRadius: theme.borderRadius.xs,
   },
   botBubble: {
-    backgroundColor: '#F0F0F0',
-    borderBottomLeftRadius: 4,
+    backgroundColor: theme.colors.grey[100],
+    borderBottomLeftRadius: theme.borderRadius.xs,
   },
   message: {
     fontSize: 15,
     lineHeight: 20,
   },
   userMessage: {
-    color: '#FFFFFF',
+    color: theme.colors.white,
   },
   botMessage: {
-    color: '#333333',
+    color: theme.colors.grey[800],
   },
   timestamp: {
     fontSize: 11,
     marginTop: 4,
   },
   userTimestamp: {
-    color: 'rgba(255,255,255,0.7)',
+    color: theme.colors.white + 'B3',
     textAlign: 'right',
   },
   botTimestamp: {
-    color: '#999999',
+    color: theme.colors.grey[500],
   },
 });
 

@@ -2,14 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
-
-const modules = [
-  { id: 'aquadoc', icon: '🔬', title: 'AquaDoc', desc: 'AI Disease Diagnosis — snap a photo, get instant analysis', color: '#E74C3C', bg: '#FDEDEC' },
-  { id: 'aquavoice', icon: '🎙️', title: 'AquaVoice', desc: 'Voice Accounting — speak to log expenses & income', color: '#9B59B6', bg: '#F4ECF7' },
-  { id: 'aquaadvisor', icon: '💬', title: 'AquaAdvisor', desc: 'AI Chatbot — ask anything about fish farming', color: '#27AE60', bg: '#EAFAF1' },
-  { id: 'aquafeed', icon: '🐟', title: 'AquaFeed', desc: 'Feed Optimizer — calculate optimal feed & cost', color: '#F39C12', bg: '#FEF5E7' },
-  { id: 'aquaconnect', icon: '🤝', title: 'AquaConnect', desc: 'Cooperative — connect with local farmers', color: '#2980B9', bg: '#EBF5FB' },
-];
+import { MODULES } from '../../utils/moduleConfig';
 
 export default function ModulesScreen() {
   const router = useRouter();
@@ -22,19 +15,19 @@ export default function ModulesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {modules.map((mod) => (
+        {MODULES.map((mod) => (
           <TouchableOpacity
             key={mod.id}
             style={s.card}
             onPress={() => router.push(`/${mod.id}`)}
             activeOpacity={0.7}
           >
-            <View style={[s.cardIcon, { backgroundColor: mod.bg }]}>
+            <View style={[s.cardIcon, { backgroundColor: mod.lightColor }]}>
               <Text style={{ fontSize: 28 }}>{mod.icon}</Text>
             </View>
             <View style={s.cardInfo}>
               <Text style={s.cardTitle}>{mod.title}</Text>
-              <Text style={s.cardDesc}>{mod.desc}</Text>
+              <Text style={s.cardDesc}>{mod.description}</Text>
             </View>
             <Text style={s.arrow}>›</Text>
           </TouchableOpacity>
@@ -49,41 +42,41 @@ const s = StyleSheet.create({
   header: {
     backgroundColor: theme.colors.primary,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: 24,
+    paddingTop: theme.spacing.lg + 4,
     paddingBottom: theme.spacing.lg,
   },
-  headerTitle: { fontSize: theme.fontSize.xl, fontWeight: 'bold', color: '#FFF' },
-  headerSub: { fontSize: theme.fontSize.sm, color: '#FFFFFFBB', marginTop: 2 },
+  headerTitle: { fontSize: theme.fontSize.xxl, fontWeight: 'bold', color: theme.colors.white },
+  headerSub: { fontSize: theme.fontSize.sm, color: theme.colors.white + 'BB', marginTop: 2 },
   scroll: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
-    paddingBottom: 24,
+    paddingBottom: theme.spacing.lg,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.colors.card,
     borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 10,
+    padding: theme.spacing.md,
+    marginBottom: theme.spacing.sm + 2,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
   cardIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
+    width: theme.layout.avatarXL,
+    height: theme.layout.avatarXL,
+    borderRadius: theme.borderRadius.xl,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: theme.spacing.sm + 6,
   },
   cardInfo: { flex: 1 },
   cardTitle: {
-    fontSize: theme.fontSize.md,
+    fontSize: theme.fontSize.lg,
     fontWeight: '600',
     color: theme.colors.text,
   },
@@ -94,8 +87,8 @@ const s = StyleSheet.create({
     lineHeight: 18,
   },
   arrow: {
-    fontSize: 22,
+    fontSize: theme.fontSize.xl,
     color: theme.colors.textLight,
-    marginLeft: 8,
+    marginLeft: theme.spacing.sm,
   },
 });

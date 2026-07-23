@@ -1,6 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
-import { Card } from '../ui/Card';
+import { theme } from '../../utils/theme';
+import { MODULE_COLOR_MAP } from '../../utils/moduleConfig';
+
+const MODULE_COLOR = MODULE_COLOR_MAP.aquaconnect;
 
 interface BuyerInfo {
   id: string;
@@ -24,7 +27,7 @@ const BuyerCard: React.FC<BuyerCardProps> = ({ buyer, onContact, style }) => {
   };
 
   return (
-    <Card style={style} padding={16}>
+    <View style={[styles.card, style]}>
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{buyer.name.charAt(0)}</Text>
@@ -54,7 +57,7 @@ const BuyerCard: React.FC<BuyerCardProps> = ({ buyer, onContact, style }) => {
 
         {onContact && (
           <TouchableOpacity
-            style={styles.contactButton}
+            style={[styles.contactButton, { backgroundColor: MODULE_COLOR }]}
             onPress={() => onContact(buyer.id)}
             activeOpacity={0.7}
           >
@@ -62,41 +65,51 @@ const BuyerCard: React.FC<BuyerCardProps> = ({ buyer, onContact, style }) => {
           </TouchableOpacity>
         )}
       </View>
-    </Card>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  card: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    shadowColor: theme.colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 14,
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1E88E5',
+    width: theme.layout.avatarMd,
+    height: theme.layout.avatarMd,
+    borderRadius: theme.layout.avatarMd / 2,
+    backgroundColor: MODULE_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: theme.spacing.sm + 4,
   },
   avatarText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.lg,
     fontWeight: '700',
   },
   headerInfo: {
     flex: 1,
   },
   name: {
-    fontSize: 16,
+    fontSize: theme.fontSize.lg,
     fontWeight: '700',
-    color: '#333333',
+    color: theme.colors.grey[800],
   },
   location: {
     fontSize: 13,
-    color: '#777777',
+    color: theme.colors.grey[600],
     marginTop: 2,
   },
   details: {
@@ -106,20 +119,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#F0F0F0',
+    borderColor: theme.colors.grey[100],
   },
   detailItem: {
     flex: 1,
   },
   detailLabel: {
-    fontSize: 12,
-    color: '#999999',
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.grey[500],
     marginBottom: 2,
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: theme.fontSize.sm,
     fontWeight: '600',
-    color: '#333333',
+    color: theme.colors.grey[800],
   },
   footer: {
     flexDirection: 'row',
@@ -127,24 +140,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rating: {
-    fontSize: 14,
-    color: '#FFC107',
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.warning,
     letterSpacing: 1,
   },
   lastActive: {
-    fontSize: 12,
-    color: '#999999',
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.grey[500],
     marginTop: 2,
   },
   contactButton: {
-    backgroundColor: '#1E88E5',
-    paddingVertical: 8,
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: 20,
-    borderRadius: 8,
+    borderRadius: theme.borderRadius.sm,
   },
   contactText: {
-    color: '#FFFFFF',
-    fontSize: 14,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.sm,
     fontWeight: '600',
   },
 });

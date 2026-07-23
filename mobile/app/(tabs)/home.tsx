@@ -1,20 +1,16 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
+import { HOME_STATS, RECENT_ACTIVITY } from '../../utils/mockData';
 
-const stats = [
-  { label: 'Total Ponds', value: '2', icon: '🏞️', color: '#2980B9' },
-  { label: 'Active Species', value: '3', icon: '🐟', color: '#27AE60' },
-  { label: 'This Month', value: '₹12,500', icon: '💸', color: '#E74C3C' },
-  { label: 'Diseases', value: '1', icon: '🔬', color: '#F39C12' },
-];
-
-const recentActivity = [
-  { icon: '🔬', text: 'Disease diagnosed: White Spot', time: 'Today, 2:30 PM', color: '#E74C3C' },
-  { icon: '🎙️', text: 'Expense logged: ₹12,000 (Feed)', time: 'Today, 10:30 AM', color: '#9B59B6' },
-  { icon: '💬', text: 'Asked Advisor about water pH', time: 'Yesterday', color: '#27AE60' },
-  { icon: '💰', text: 'Income logged: ₹45,000 (Sale)', time: '2 days ago', color: '#28A745' },
-];
+const COLOR_MAP: Record<string, string> = {
+  infoBlue: theme.colors.infoBlue,
+  green: theme.colors.green,
+  red: theme.colors.red,
+  amber: theme.colors.amber,
+  purple: theme.colors.purple,
+  success: theme.colors.success,
+};
 
 export default function Home() {
   return (
@@ -27,19 +23,19 @@ export default function Home() {
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <Text style={s.sectionTitle}>Overview</Text>
         <View style={s.statsGrid}>
-          {stats.map((st, i) => (
+          {HOME_STATS.map((st, i) => (
             <View key={i} style={s.statCard}>
               <Text style={s.statIcon}>{st.icon}</Text>
-              <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
+              <Text style={[s.statValue, { color: COLOR_MAP[st.color] || theme.colors.text }]}>{st.value}</Text>
               <Text style={s.statLabel}>{st.label}</Text>
             </View>
           ))}
         </View>
 
         <Text style={s.sectionTitle}>Recent Activity</Text>
-        {recentActivity.map((act, i) => (
+        {RECENT_ACTIVITY.map((act, i) => (
           <View key={i} style={s.activityCard}>
-            <View style={[s.activityDot, { backgroundColor: act.color }]} />
+            <View style={[s.activityDot, { backgroundColor: COLOR_MAP[act.color] || theme.colors.textLight }]} />
             <View style={s.activityInfo}>
               <Text style={s.activityText}>{act.text}</Text>
               <Text style={s.activityTime}>{act.time}</Text>
@@ -56,48 +52,48 @@ const s = StyleSheet.create({
   header: {
     backgroundColor: theme.colors.primary,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: 24,
+    paddingTop: theme.spacing.lg + 4,
     paddingBottom: theme.spacing.lg,
   },
-  greeting: { fontSize: theme.fontSize.xl, fontWeight: 'bold', color: '#FFF' },
-  subtitle: { fontSize: theme.fontSize.sm, color: '#FFFFFFBB', marginTop: 2 },
+  greeting: { fontSize: theme.fontSize.xxl, fontWeight: 'bold', color: theme.colors.white },
+  subtitle: { fontSize: theme.fontSize.sm, color: theme.colors.white + 'BB', marginTop: 2 },
   scroll: {
     flex: 1,
     backgroundColor: theme.colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: theme.borderRadius.xl,
+    borderTopRightRadius: theme.borderRadius.xl,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
-    paddingBottom: 24,
+    paddingBottom: theme.spacing.lg,
   },
   sectionTitle: {
-    fontSize: theme.fontSize.md,
+    fontSize: theme.fontSize.lg,
     fontWeight: '700',
     color: theme.colors.text,
-    marginBottom: 12,
+    marginBottom: theme.spacing.sm + 4,
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
+    gap: theme.spacing.sm + 2,
+    marginBottom: theme.spacing.xl,
   },
   statCard: {
     width: '47%',
     backgroundColor: theme.colors.card,
     borderRadius: theme.borderRadius.lg,
-    padding: 16,
+    padding: theme.spacing.md,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
-  statIcon: { fontSize: 22 },
+  statIcon: { fontSize: theme.fontSize.xl },
   statValue: {
-    fontSize: 20,
+    fontSize: theme.fontSize.xl,
     fontWeight: '700',
-    marginTop: 8,
+    marginTop: theme.spacing.sm,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: theme.fontSize.xs,
     color: theme.colors.textLight,
     marginTop: 4,
   },
@@ -106,16 +102,16 @@ const s = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.card,
     borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginBottom: 8,
+    padding: theme.spacing.sm + 6,
+    marginBottom: theme.spacing.sm,
     borderWidth: 1,
     borderColor: theme.colors.border,
   },
   activityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 12,
+    width: theme.spacing.sm,
+    height: theme.spacing.sm,
+    borderRadius: theme.spacing.sm / 2,
+    marginRight: theme.spacing.sm + 4,
   },
   activityInfo: { flex: 1 },
   activityText: {

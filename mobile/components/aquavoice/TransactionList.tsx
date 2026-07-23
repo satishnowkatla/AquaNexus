@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, ViewStyle } from 'react-native';
-import { Card } from '../ui/Card';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { theme } from '../../utils/theme';
+import { MOCK_VOICE_TXS } from '../../utils/mockData';
 
 interface Transaction {
   id: string;
@@ -28,7 +29,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
         <View
           style={[
             styles.typeIndicator,
-            { backgroundColor: item.type === 'income' ? '#4CAF50' : '#E53935' },
+            { backgroundColor: item.type === 'income' ? theme.colors.success : theme.colors.danger },
           ]}
         />
         <View>
@@ -41,7 +42,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
       <Text
         style={[
           styles.amount,
-          { color: item.type === 'income' ? '#4CAF50' : '#E53935' },
+          { color: item.type === 'income' ? theme.colors.success : theme.colors.danger },
         ]}
       >
         {item.type === 'income' ? '+' : '-'}₹{item.amount.toLocaleString()}
@@ -50,38 +51,43 @@ const TransactionList: React.FC<TransactionListProps> = ({
   );
 
   return (
-    <Card style={style} padding={0}>
+    <View style={[styles.container, style]}>
       <Text style={styles.header}>Transactions</Text>
-      <FlatList
-        data={transactions}
-        keyExtractor={(item) => item.id}
-        renderItem={renderTransaction}
-        scrollEnabled={false}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>{emptyMessage}</Text>
+      {transactions.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>{emptyMessage}</Text>
+        </View>
+      ) : (
+        transactions.map((item) => (
+          <View key={item.id}>
+            {renderTransaction({ item })}
+            <View style={styles.separator} />
           </View>
-        }
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
-    </Card>
+        ))
+      )}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.borderRadius.lg,
+    overflow: 'hidden',
+  },
   header: {
-    fontSize: 16,
+    fontSize: theme.fontSize.lg,
     fontWeight: '700',
-    color: '#333333',
-    padding: 16,
-    paddingBottom: 8,
+    color: theme.colors.grey[800],
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
   },
   transactionItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm + 4,
   },
   transactionLeft: {
     flexDirection: 'row',
@@ -92,26 +98,26 @@ const styles = StyleSheet.create({
     width: 4,
     height: 36,
     borderRadius: 2,
-    marginRight: 12,
+    marginRight: theme.spacing.sm + 4,
   },
   description: {
-    fontSize: 14,
+    fontSize: theme.fontSize.sm,
     fontWeight: '600',
-    color: '#333333',
+    color: theme.colors.grey[800],
   },
   meta: {
-    fontSize: 12,
-    color: '#999999',
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.grey[500],
     marginTop: 2,
   },
   amount: {
     fontSize: 15,
     fontWeight: '700',
-    marginLeft: 12,
+    marginLeft: theme.spacing.sm + 4,
   },
   separator: {
     height: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: theme.colors.grey[100],
     marginLeft: 32,
   },
   empty: {
@@ -119,8 +125,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 14,
-    color: '#999999',
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.grey[500],
   },
 });
 

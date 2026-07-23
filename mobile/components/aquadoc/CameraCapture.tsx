@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { theme } from '../../utils/theme';
 
 interface CameraCaptureProps {
   onCapture?: (uri: string) => void;
@@ -46,7 +47,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: theme.colors.black,
   },
   preview: {
     flex: 1,
@@ -55,25 +56,25 @@ const styles = StyleSheet.create({
   },
   icon: {
     fontSize: 64,
-    marginBottom: 12,
+    marginBottom: theme.spacing.sm + 4,
   },
   placeholderText: {
-    color: '#999999',
-    fontSize: 16,
+    color: theme.colors.grey[500],
+    fontSize: theme.fontSize.lg,
   },
   actions: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
+    paddingVertical: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.md,
   },
   captureButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: theme.layout.avatarXL,
+    height: theme.layout.avatarXL,
+    borderRadius: theme.layout.avatarXL / 2,
     borderWidth: 4,
-    borderColor: '#FFFFFF',
+    borderColor: theme.colors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -81,16 +82,16 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: theme.colors.white,
   },
   galleryButton: {
     position: 'absolute',
     right: 24,
-    padding: 8,
+    padding: theme.spacing.sm,
   },
   galleryText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: theme.colors.white,
+    fontSize: theme.fontSize.lg,
     fontWeight: '500',
   },
 });

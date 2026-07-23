@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from "react-native";
+import { theme } from '../../utils/theme';
 
 export default function ChatModal() {
   return (
@@ -9,6 +10,6 @@ export default function ChatModal() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
-  title: { fontSize: 22, fontWeight: "bold" },
+  container: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.colors.white },
+  title: { fontSize: theme.fontSize.xl, fontWeight: "bold" },
 });

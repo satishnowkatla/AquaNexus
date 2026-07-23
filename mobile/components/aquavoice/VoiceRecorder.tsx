@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { theme } from '../../utils/theme';
 
 interface VoiceRecorderProps {
   onRecord?: (duration: number) => void;
@@ -84,21 +85,21 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingVertical: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    paddingVertical: theme.spacing.lg,
+    backgroundColor: theme.colors.white,
+    borderRadius: theme.borderRadius.xl,
   },
   label: {
-    fontSize: 16,
+    fontSize: theme.fontSize.lg,
     fontWeight: '600',
-    color: '#333333',
-    marginBottom: 8,
+    color: theme.colors.grey[800],
+    marginBottom: theme.spacing.sm,
   },
   timer: {
-    fontSize: 32,
+    fontSize: theme.fontSize.h1,
     fontWeight: '300',
-    color: '#333333',
-    marginBottom: 20,
+    color: theme.colors.grey[800],
+    marginBottom: theme.spacing.xl,
     fontVariant: ['tabular-nums'],
   },
   waveform: {
@@ -106,42 +107,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 60,
-    marginBottom: 24,
+    marginBottom: theme.spacing.lg,
     gap: 4,
   },
   waveBar: {
     width: 4,
-    backgroundColor: '#E53935',
+    backgroundColor: theme.colors.danger,
     borderRadius: 2,
   },
   recordButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FFEBEE',
+    width: theme.layout.avatarXL,
+    height: theme.layout.avatarXL,
+    borderRadius: theme.layout.avatarXL / 2,
+    backgroundColor: theme.colors.lightRed,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 4,
-    borderColor: '#E53935',
-    marginBottom: 12,
+    borderColor: theme.colors.danger,
+    marginBottom: theme.spacing.sm + 4,
   },
   recordButtonActive: {
-    backgroundColor: '#FFCDD2',
+    backgroundColor: theme.colors.danger + '30',
   },
   recordInner: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#E53935',
+    backgroundColor: theme.colors.danger,
   },
   recordInnerActive: {
-    borderRadius: 4,
+    borderRadius: theme.borderRadius.xs,
     width: 22,
     height: 22,
   },
   hint: {
-    fontSize: 12,
-    color: '#999999',
+    fontSize: theme.fontSize.xs,
+    color: theme.colors.grey[500],
   },
 });
 

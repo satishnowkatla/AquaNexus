@@ -1,5 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { theme } from '../../utils/theme';
+import { MODULE_COLOR_MAP } from '../../utils/moduleConfig';
+
+const MODULE_COLOR = MODULE_COLOR_MAP.aquaadvisor;
 
 interface SuggestionChipsProps {
   suggestions: string[];
@@ -17,11 +21,11 @@ const SuggestionChips: React.FC<SuggestionChipsProps> = ({
       {suggestions.map((suggestion, index) => (
         <TouchableOpacity
           key={index}
-          style={styles.chip}
+          style={[styles.chip, { borderColor: MODULE_COLOR + '35' }]}
           onPress={() => onSelect?.(suggestion)}
           activeOpacity={0.7}
         >
-          <Text style={styles.chipText}>{suggestion}</Text>
+          <Text style={[styles.chipText, { color: MODULE_COLOR }]}>{suggestion}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -32,21 +36,19 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    gap: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
   },
   chip: {
-    backgroundColor: '#E3F2FD',
-    paddingVertical: 8,
+    backgroundColor: MODULE_COLOR + '15',
+    paddingVertical: theme.spacing.sm,
     paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#BBDEFB',
   },
   chipText: {
     fontSize: 13,
-    color: '#1E88E5',
     fontWeight: '500',
   },
 });

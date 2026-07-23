@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { theme } from '../utils/theme';
+import { MODULE_COLOR_MAP } from '../utils/moduleConfig';
+
+const MODULE_COLOR = MODULE_COLOR_MAP.aquafeed;
+const DEFAULT_FEED_PRICE = '65';
 
 export default function AquaFeedScreen() {
   const router = useRouter();
@@ -10,8 +14,13 @@ export default function AquaFeedScreen() {
   const [depth, setDepth] = useState('');
   const [stockCount, setStockCount] = useState('');
   const [avgWeight, setAvgWeight] = useState('');
-  const [feedPrice, setFeedPrice] = useState('65');
-  const [result, setResult] = useState<any>(null);
+  const [feedPrice, setFeedPrice] = useState(DEFAULT_FEED_PRICE);
+  const [result, setResult] = useState<{
+    daily: number;
+    dailyCost: number;
+    monthly: number;
+    schedule: { time: string; pct: number }[];
+  } | null>(null);
 
   const calc = () => {
     const stock = parseInt(stockCount) || 0;
@@ -37,7 +46,7 @@ export default function AquaFeedScreen() {
       <View style={s.nav}>
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}><Text style={s.backText}>←</Text></TouchableOpacity>
         <Text style={s.navTitle}>AquaFeed</Text>
-        <View style={{ width: 40 }} />
+        <View style={{ width: theme.layout.backButtonSize }} />
       </View>
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
@@ -69,7 +78,7 @@ export default function AquaFeedScreen() {
 
         {result && (
           <>
-            <Text style={[s.sectionTitle, { marginTop: 24 }]}>Results</Text>
+            <Text style={[s.sectionTitle, { marginTop: theme.spacing.xl }]}>Results</Text>
             <View style={s.resultGrid}>
               {[
                 { label: 'Daily Feed', value: `${result.daily} kg`, color: theme.colors.primary },
@@ -84,8 +93,8 @@ export default function AquaFeedScreen() {
               ))}
             </View>
 
-            <Text style={[s.sectionTitle, { marginTop: 20 }]}>Feeding Schedule</Text>
-            {result.schedule.map((sch: any, i: number) => (
+            <Text style={[s.sectionTitle, { marginTop: theme.spacing.xl }]}>Feeding Schedule</Text>
+            {result.schedule.map((sch, i) => (
               <View key={i} style={s.scheduleRow}>
                 <Text style={s.scheduleTime}>{sch.time}</Text>
                 <View style={s.bar}>
@@ -103,26 +112,26 @@ export default function AquaFeedScreen() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.background },
-  nav: { backgroundColor: '#F39C12', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 20, paddingBottom: 14, paddingHorizontal: 12 },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  backText: { color: '#FFF', fontSize: 24, fontWeight: '600' },
-  navTitle: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  nav: { backgroundColor: MODULE_COLOR, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: theme.spacing.sm + 12, paddingBottom: theme.spacing.sm + 6, paddingHorizontal: theme.spacing.sm + 4 },
+  backBtn: { width: theme.layout.backButtonSize, height: theme.layout.backButtonSize, justifyContent: 'center', alignItems: 'center' },
+  backText: { color: theme.colors.white, fontSize: theme.fontSize.xxl, fontWeight: '600' },
+  navTitle: { color: theme.colors.white, fontSize: theme.fontSize.lg, fontWeight: '700' },
   scroll: { padding: theme.spacing.lg, paddingBottom: 30 },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: theme.colors.text, marginBottom: 12 },
-  label: { fontSize: 12, color: theme.colors.textLight, marginBottom: 4, marginTop: 10 },
-  input: { backgroundColor: theme.colors.card, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.border, padding: 12, fontSize: 14, color: theme.colors.text },
-  btnRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  calcBtn: { flex: 3, backgroundColor: '#F39C12', paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
-  calcBtnText: { color: '#FFF', fontSize: 14, fontWeight: '600' },
-  resetBtn: { flex: 1, backgroundColor: theme.colors.card, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
-  resetText: { color: theme.colors.textLight, fontSize: 14 },
-  resultGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  resultCard: { width: '48%', backgroundColor: theme.colors.card, borderRadius: 10, padding: 14, borderWidth: 1, borderColor: theme.colors.border },
+  sectionTitle: { fontSize: theme.fontSize.sm + 2, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.sm + 4 },
+  label: { fontSize: theme.fontSize.xs, color: theme.colors.textLight, marginBottom: 4, marginTop: theme.spacing.sm + 2 },
+  input: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.sm, borderWidth: 1, borderColor: theme.colors.border, padding: theme.spacing.sm + 4, fontSize: theme.fontSize.sm, color: theme.colors.text },
+  btnRow: { flexDirection: 'row', gap: theme.spacing.sm + 2, marginTop: theme.spacing.xl },
+  calcBtn: { flex: 3, backgroundColor: MODULE_COLOR, paddingVertical: theme.spacing.sm + 4, borderRadius: theme.borderRadius.md, alignItems: 'center' },
+  calcBtnText: { color: theme.colors.white, fontSize: theme.fontSize.sm, fontWeight: '600' },
+  resetBtn: { flex: 1, backgroundColor: theme.colors.card, paddingVertical: theme.spacing.sm + 4, borderRadius: theme.borderRadius.md, alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
+  resetText: { color: theme.colors.textLight, fontSize: theme.fontSize.sm },
+  resultGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm + 2 },
+  resultCard: { width: '48%', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, borderWidth: 1, borderColor: theme.colors.border },
   resultLabel: { fontSize: 11, color: theme.colors.textLight },
-  resultValue: { fontSize: 20, fontWeight: '700', marginTop: 4 },
-  scheduleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, backgroundColor: theme.colors.card, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: theme.colors.border },
-  scheduleTime: { fontSize: 12, fontWeight: '600', color: theme.colors.text, width: 70 },
-  bar: { flex: 1, height: 6, backgroundColor: theme.colors.background, borderRadius: 3, marginHorizontal: 10, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: '#F39C12', borderRadius: 3 },
-  scheduleKg: { fontSize: 12, fontWeight: '600', color: '#F39C12', width: 50, textAlign: 'right' },
+  resultValue: { fontSize: theme.fontSize.xl, fontWeight: '700', marginTop: 4 },
+  scheduleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm, backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 4, borderWidth: 1, borderColor: theme.colors.border },
+  scheduleTime: { fontSize: theme.fontSize.xs, fontWeight: '600', color: theme.colors.text, width: 70 },
+  bar: { flex: 1, height: 6, backgroundColor: theme.colors.background, borderRadius: 3, marginHorizontal: theme.spacing.sm + 2, overflow: 'hidden' },
+  barFill: { height: '100%', backgroundColor: MODULE_COLOR, borderRadius: 3 },
+  scheduleKg: { fontSize: theme.fontSize.xs, fontWeight: '600', color: MODULE_COLOR, width: 50, textAlign: 'right' },
 });

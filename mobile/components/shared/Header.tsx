@@ -37,11 +37,11 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: theme.fontSize.xl,
-    color: '#FFFFFF',
+    color: theme.colors.white,
   },
   title: {
     fontSize: theme.fontSize.lg,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: theme.colors.white,
   },
 });

@@ -25,7 +25,7 @@ export const Button = ({
       disabled={disabled || loading}
     >
       {loading ? (
-        <ActivityIndicator color="#fff" />
+        <ActivityIndicator color={theme.colors.white} />
       ) : (
         <Text style={[styles.text, styles[textStyleKey]]}>{title}</Text>
       )}
@@ -50,9 +50,9 @@ const styles = StyleSheet.create({
   },
   danger: { backgroundColor: theme.colors.danger },
   disabled: { opacity: 0.6 },
-  text: { fontSize: theme.fontSize.md, fontWeight: '600' },
-  primaryText: { color: '#fff' },
-  secondaryText: { color: '#fff' },
+  text: { fontSize: theme.fontSize.lg, fontWeight: '600' },
+  primaryText: { color: theme.colors.white },
+  secondaryText: { color: theme.colors.white },
   outlineText: { color: theme.colors.primary },
-  dangerText: { color: '#fff' },
+  dangerText: { color: theme.colors.white },
 });

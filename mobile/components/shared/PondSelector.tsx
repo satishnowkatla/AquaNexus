@@ -84,14 +84,14 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   pondNameSelected: {
-    color: '#FFFFFF',
+    color: theme.colors.white,
   },
   pondSpecies: {
     fontSize: theme.fontSize.xs,
     color: theme.colors.textLight,
   },
   pondSpeciesSelected: {
-    color: '#FFFFFF',
+    color: theme.colors.white,
     opacity: 0.9,
   },
 });

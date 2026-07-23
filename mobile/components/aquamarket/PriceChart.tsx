@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Card } from '../ui/Card';
+import { theme } from '../../utils/theme';
 
 interface PriceDataPoint {
   label: string;
@@ -23,7 +23,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
   const maxValue = Math.max(...data.map((d) => d.value), 1);
 
   return (
-    <Card style={style} padding={16}>
+    <View style={[styles.card, style]}>
       <Text style={styles.title}>{title}</Text>
 
       {data.length === 0 ? (
@@ -34,7 +34,7 @@ const PriceChart: React.FC<PriceChartProps> = ({
         <View style={styles.chartArea}>
           <View style={styles.bars}>
             {data.map((point, index) => {
-              const barHeight = (point.value / maxValue) * 120;
+              const barHeight = (point.value / maxValue) * theme.layout.barHeight;
               return (
                 <View key={index} style={styles.barColumn}>
                   <Text style={styles.barValue}>
@@ -53,16 +53,26 @@ const PriceChart: React.FC<PriceChartProps> = ({
           </View>
         </View>
       )}
-    </Card>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  card: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.borderRadius.lg,
+    padding: theme.spacing.md,
+    shadowColor: theme.colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   title: {
-    fontSize: 16,
+    fontSize: theme.fontSize.lg,
     fontWeight: '700',
-    color: '#333333',
-    marginBottom: 16,
+    color: theme.colors.grey[800],
+    marginBottom: theme.spacing.md,
   },
   empty: {
     height: 160,
@@ -70,8 +80,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 14,
-    color: '#999999',
+    fontSize: theme.fontSize.sm,
+    color: theme.colors.grey[500],
   },
   chartArea: {
     paddingTop: 8,
@@ -89,18 +99,18 @@ const styles = StyleSheet.create({
   },
   bar: {
     width: 24,
-    backgroundColor: '#1E88E5',
-    borderRadius: 6,
+    backgroundColor: theme.colors.infoBlue,
+    borderRadius: theme.borderRadius.sm,
     minHeight: 4,
   },
   barValue: {
     fontSize: 10,
-    color: '#555555',
+    color: theme.colors.grey[700],
     marginBottom: 4,
   },
   barLabel: {
     fontSize: 11,
-    color: '#777777',
+    color: theme.colors.grey[600],
     marginTop: 6,
   },
 });

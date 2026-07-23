@@ -1,36 +1,37 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { theme } from '../../utils/theme';
+import { LANGUAGE_OPTIONS } from '../../utils/mockData';
 
 interface LanguageToggleProps {
   selected: string;
   onSelect: (lang: string) => void;
 }
 
-const languages = [
-  { code: 'te', label: 'తెలుగు' },
-  { code: 'hi', label: 'हिन्दी' },
-  { code: 'en', label: 'English' },
-];
+const SHORT_LABELS: Record<string, string> = {
+  te: 'తెలుగు',
+  hi: 'हिन्दी',
+  en: 'English',
+};
 
 export const LanguageToggle = ({
   selected,
   onSelect,
 }: LanguageToggleProps) => (
   <View style={styles.container}>
-    {languages.map((lang) => (
+    {LANGUAGE_OPTIONS.map((lang) => (
       <TouchableOpacity
-        key={lang.code}
-        style={[styles.lang, selected === lang.code && styles.langSelected]}
-        onPress={() => onSelect(lang.code)}
+        key={lang.value}
+        style={[styles.lang, selected === lang.value && styles.langSelected]}
+        onPress={() => onSelect(lang.value)}
       >
         <Text
           style={[
             styles.text,
-            selected === lang.code && styles.textSelected,
+            selected === lang.value && styles.textSelected,
           ]}
         >
-          {lang.label}
+          {SHORT_LABELS[lang.value] || lang.label}
         </Text>
       </TouchableOpacity>
     ))}
@@ -59,6 +60,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
   },
   textSelected: {
-    color: '#FFFFFF',
+    color: theme.colors.white,
   },
 });
