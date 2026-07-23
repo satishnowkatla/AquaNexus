@@ -14,7 +14,7 @@ export default function ModulesScreen() {
         <Text style={s.headerSub}>Select a module to get started</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={s.scrollContainer} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {MODULES.map((mod) => (
           <TouchableOpacity
             key={mod.id}
@@ -47,8 +47,9 @@ const s = StyleSheet.create({
   },
   headerTitle: { fontSize: theme.fontSize.xxl, fontWeight: 'bold', color: theme.colors.white },
   headerSub: { fontSize: theme.fontSize.sm, color: theme.colors.white + 'BB', marginTop: 2 },
+  scrollContainer: { flex: 1 },
   scroll: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: theme.borderRadius.xl,
     borderTopRightRadius: theme.borderRadius.xl,

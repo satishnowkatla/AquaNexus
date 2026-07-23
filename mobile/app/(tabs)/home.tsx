@@ -20,7 +20,7 @@ export default function Home() {
         <Text style={s.subtitle}>Your aquaculture dashboard</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={s.scrollContainer} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <Text style={s.sectionTitle}>Overview</Text>
         <View style={s.statsGrid}>
           {HOME_STATS.map((st, i) => (
@@ -57,8 +57,9 @@ const s = StyleSheet.create({
   },
   greeting: { fontSize: theme.fontSize.xxl, fontWeight: 'bold', color: theme.colors.white },
   subtitle: { fontSize: theme.fontSize.sm, color: theme.colors.white + 'BB', marginTop: 2 },
+  scrollContainer: { flex: 1 },
   scroll: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: theme.colors.background,
     borderTopLeftRadius: theme.borderRadius.xl,
     borderTopRightRadius: theme.borderRadius.xl,
