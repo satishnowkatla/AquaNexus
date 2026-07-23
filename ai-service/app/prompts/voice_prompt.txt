@@ -1,0 +1,17 @@
+Parse the following voice text from an aquaculture farmer into a structured transaction.
+
+Voice text: "{text}"
+Language: {language} (te=Telugu, hi=Hindi, en=English)
+
+The farmer is describing either an income or expense related to their aquaculture business.
+
+Provide response in this exact JSON format:
+{
+  "type": "income/expense",
+  "category": "feed/seed/medicine/labor/harvest/equipment/other",
+  "amount": 0,
+  "description": "Clean description of the transaction"
+}
+
+Extract the amount in INR (Indian Rupees). If no amount mentioned, set amount to 0.
+Understand Telugu/Hindi colloquialisms for numbers and money.

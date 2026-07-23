@@ -1,0 +1,128 @@
+// AquaNexus AI - Database Schema (DBML for dbdiagram.io)
+// Copy this into dbdiagram.io to visualize your schema
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  phone varchar(15) [unique, not null]
+  full_name varchar(100) [not null]
+  role varchar(20) [default: `'farmer'`, note: 'farmer/cooperative']
+  language varchar(10) [default: `'te'`, note: 'te/hi/en']
+  avatar_url text
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table profiles {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id, not null]
+  district varchar(100)
+  village varchar(100)
+  pincode varchar(6)
+  total_pond_area decimal(10,2)
+  primary_species varchar(50)
+  years_experience int
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table ponds {
+  id uuid [pk, default: `gen_random_uuid()`]
+  farmer_id uuid [ref: > users.id, not null]
+  name varchar(100) [not null]
+  area_acres decimal(6,2) [not null]
+  species varchar(50) [not null]
+  stocking_density int
+  stocking_date date
+  expected_harvest_date date
+  status varchar(20) [default: `'active'`, note: 'active/harvested/inactive']
+  latitude decimal(10,7)
+  longitude decimal(10,7)
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table disease_reports {
+  id uuid [pk, default: `gen_random_uuid()`]
+  farmer_id uuid [ref: > users.id]
+  pond_id uuid [ref: > ponds.id]
+  image_url text
+  voice_description text
+  symptoms text[]
+  diagnosis text
+  severity varchar(20) [note: 'low/medium/high/critical']
+  treatment text
+  medicine_name varchar(200)
+  medicine_dosage text
+  follow_up_date date
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table transactions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  farmer_id uuid [ref: > users.id]
+  pond_id uuid [ref: > ponds.id]
+  type varchar(20) [not null, note: 'income/expense']
+  category varchar(50)
+  amount decimal(12,2) [not null]
+  description text
+  voice_text text
+  transaction_date date [default: `CURRENT_DATE`]
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table chat_messages {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id]
+  module varchar(50) [default: `'advisor'`]
+  message text [not null]
+  response text [not null]
+  language varchar(10) [default: `'te'`]
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table feed_schedules {
+  id uuid [pk, default: `gen_random_uuid()`]
+  pond_id uuid [ref: > ponds.id]
+  feed_type varchar(50)
+  morning_kg decimal(8,2)
+  evening_kg decimal(8,2)
+  total_daily_kg decimal(8,2)
+  feed_grade varchar(20)
+  cumulative_cost decimal(12,2)
+  start_date date
+  end_date date
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table feed_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  schedule_id uuid [ref: > feed_schedules.id]
+  feed_date date [not null]
+  quantity_kg decimal(8,2)
+  cost decimal(10,2)
+  notes text
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table cooperatives {
+  id uuid [pk, default: `gen_random_uuid()`]
+  name varchar(200) [not null]
+  district varchar(100)
+  leader_id uuid [ref: > users.id]
+  member_count int [default: `0`]
+  created_at timestamptz [default: `NOW()`]
+}
+
+Table cooperative_members {
+  id uuid [pk, default: `gen_random_uuid()`]
+  cooperative_id uuid [ref: > cooperatives.id]
+  user_id uuid [ref: > users.id]
+  joined_at timestamptz [default: `NOW()`]
+}
+
+Table cooperative_alerts {
+  id uuid [pk, default: `gen_random_uuid()`]
+  cooperative_id uuid [ref: > cooperatives.id]
+  title varchar(200)
+  message text
+  alert_type varchar(50)
+  priority varchar(20) [default: `'medium'`, note: 'low/medium/high']
+  created_at timestamptz [default: `NOW()`]
+}

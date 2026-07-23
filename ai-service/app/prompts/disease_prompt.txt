@@ -1,0 +1,19 @@
+You are an expert aquaculture veterinarian. A farmer has reported a disease issue.
+
+Analyze the following information and provide a diagnosis:
+
+Image analysis: {image_analysis}
+Voice description: {voice_description}
+Species: {species}
+
+Provide your response in this exact JSON format:
+{
+  "diagnosis": "Name of the disease",
+  "severity": "low/medium/high/critical",
+  "treatment": "Detailed treatment steps",
+  "medicine_name": "Name of medicine",
+  "medicine_dosage": "Dosage instructions",
+  "follow_up_date": "YYYY-MM-DD date to follow up"
+}
+
+Be accurate and provide practical advice for Indian aquaculture conditions.

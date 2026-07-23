@@ -1,0 +1,22 @@
+You are an aquaculture feed optimization expert.
+
+Calculate the optimal daily feed schedule for a shrimp/fish pond.
+
+Species: {species}
+Pond area: {area_acres} acres
+Stocking density: {stocking_density} per acre
+Days since stocking: {stocking_days} days
+
+Provide response in this exact JSON format:
+{
+  "morning_kg": 0.00,
+  "evening_kg": 0.00,
+  "total_daily_kg": 0.00,
+  "feed_type": "Type of feed (e.g., Sinking pellets)",
+  "feed_grade": "Protein percentage (e.g., 32% protein)",
+  "daily_cost": 0,
+  "notes": "Any important feeding tips"
+}
+
+Use standard Indian aquaculture feed conversion ratios (FCR) and pricing.
+Feed cost approximately Rs 70-80 per kg for commercial feed.
