@@ -1,8 +1,7 @@
 import { Router, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
-import axios from 'axios';
-import { env } from '../config/env';
+import { geminiService } from '../services/gemini';
 
 const router = Router();
 
@@ -11,15 +10,12 @@ router.post('/calculate', authMiddleware, async (req: AuthRequest, res: Response
   try {
     const { pondId, species, area_acres, stocking_density, stocking_days } = req.body;
 
-    // Call AI service
-    const aiResponse = await axios.post(`${env.AI_SERVICE_URL}/ai/feed/calculate`, {
-      species,
-      area_acres,
-      stocking_density,
-      stocking_days,
-    });
-
-    const schedule = aiResponse.data;
+    const schedule = await geminiService.calculateFeed(
+      species || 'shrimp',
+      area_acres || 1,
+      stocking_density || 50000,
+      stocking_days || 30
+    );
 
     // Save to database
     const { data, error } = await supabase

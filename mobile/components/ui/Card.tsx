@@ -5,10 +5,11 @@ import { theme } from '../../utils/theme';
 interface CardProps {
   children: React.ReactNode;
   style?: object;
+  padding?: number;
 }
 
-export const Card = ({ children, style }: CardProps) => (
-  <View style={[styles.card, style]}>{children}</View>
+export const Card = ({ children, style, padding }: CardProps) => (
+  <View style={[styles.card, padding !== undefined && { padding }, style]}>{children}</View>
 );
 
 const styles = StyleSheet.create({

@@ -3,6 +3,6 @@ export const env = {
   SUPABASE_URL: process.env.SUPABASE_URL || '',
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || '',
   SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
-  AI_SERVICE_URL: process.env.AI_SERVICE_URL || 'http://localhost:8000',
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
   JWT_SECRET: process.env.JWT_SECRET || 'default-secret-change-this',
 };

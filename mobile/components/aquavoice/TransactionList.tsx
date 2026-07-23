@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, FlatList, StyleSheet, ViewStyle } from 'react-native';
-import Card from '../ui/Card';
+import { Card } from '../ui/Card';
 
 interface Transaction {
   id: string;

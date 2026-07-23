@@ -1,24 +1,20 @@
 import { Router, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
-import axios from 'axios';
-import { env } from '../config/env';
+import { geminiService } from '../services/gemini';
 
 const router = Router();
 
 // Diagnose disease
 router.post('/diagnose', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { pondId, imageBase64, voiceDescription } = req.body;
+    const { pondId, imageBase64, voiceDescription, species } = req.body;
 
-    // Call AI service
-    const aiResponse = await axios.post(`${env.AI_SERVICE_URL}/ai/disease/diagnose`, {
-      image_base64: imageBase64,
-      voice_description: voiceDescription,
-      pond_id: pondId,
-    });
-
-    const diagnosis = aiResponse.data;
+    const diagnosis = await geminiService.diagnoseDisease(
+      imageBase64 || '',
+      voiceDescription || '',
+      species || 'shrimp'
+    );
 
     // Save to database
     const { data, error } = await supabase

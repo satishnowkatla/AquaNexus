@@ -16,19 +16,22 @@ export const Button = ({
   variant = 'primary',
   loading = false,
   disabled = false,
-}: ButtonProps) => (
-  <TouchableOpacity
-    style={[styles.button, styles[variant], disabled && styles.disabled]}
-    onPress={onPress}
-    disabled={disabled || loading}
-  >
-    {loading ? (
-      <ActivityIndicator color="#fff" />
-    ) : (
-      <Text style={[styles.text, styles[`${variant}Text`]}>{title}</Text>
-    )}
-  </TouchableOpacity>
-);
+}: ButtonProps) => {
+  const textStyleKey = `${variant}Text` as keyof typeof styles;
+  return (
+    <TouchableOpacity
+      style={[styles.button, styles[variant], disabled && styles.disabled]}
+      onPress={onPress}
+      disabled={disabled || loading}
+    >
+      {loading ? (
+        <ActivityIndicator color="#fff" />
+      ) : (
+        <Text style={[styles.text, styles[textStyleKey]]}>{title}</Text>
+      )}
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
   button: {

@@ -1,23 +1,16 @@
 import { Router, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
-import axios from 'axios';
-import { env } from '../config/env';
+import { geminiService } from '../services/gemini';
 
 const router = Router();
 
 // Record transaction from voice
 router.post('/record', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { pondId, text } = req.body;
+    const { pondId, text, language } = req.body;
 
-    // Call AI service to parse voice text
-    const aiResponse = await axios.post(`${env.AI_SERVICE_URL}/ai/voice/parse`, {
-      text,
-      language: 'te',
-    });
-
-    const parsed = aiResponse.data;
+    const parsed = await geminiService.parseVoice(text, language || 'en');
 
     // Save to database
     const { data, error } = await supabase

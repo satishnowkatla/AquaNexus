@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
-import Card from '../ui/Card';
+import { Card } from '../ui/Card';
 
 interface BuyerInfo {
   id: string;

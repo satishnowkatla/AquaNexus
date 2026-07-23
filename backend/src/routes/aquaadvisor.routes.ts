@@ -1,8 +1,7 @@
 import { Router, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
-import axios from 'axios';
-import { env } from '../config/env';
+import { geminiService } from '../services/gemini';
 
 const router = Router();
 
@@ -11,13 +10,7 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
   try {
     const { message, language } = req.body;
 
-    // Call AI service
-    const aiResponse = await axios.post(`${env.AI_SERVICE_URL}/ai/advisor/chat`, {
-      message,
-      language: language || 'te',
-    });
-
-    const aiMessage = aiResponse.data;
+    const aiMessage = await geminiService.chat(message, language || 'en');
 
     // Save to database
     const { data, error } = await supabase
