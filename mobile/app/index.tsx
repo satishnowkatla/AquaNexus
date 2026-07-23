@@ -11,20 +11,10 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
-      const [session, onboardingDone] = await Promise.all([
-        supabase.auth.getSession(),
-        AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE),
-      ]);
-
       await new Promise(r => setTimeout(r, 2000));
 
-      if (session.data.session) {
-        router.replace('/(tabs)/home');
-      } else if (onboardingDone) {
-        router.replace('/auth/login');
-      } else {
-        router.replace('/onboarding');
-      }
+      // TODO: Re-enable auth check before final submission
+      router.replace('/(tabs)/home');
     };
     init();
   }, []);
