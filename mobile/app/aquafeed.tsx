@@ -80,9 +80,6 @@ export default function AquaFeedScreen() {
     if (!result) return;
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { Alert.alert('Error', 'Not logged in'); return; }
-
       const { error } = await supabase.from('feed_schedules').insert({
         feed_type: result.feedType || 'Sinking Pellets',
         morning_kg: +(result.daily * 0.35).toFixed(2),
