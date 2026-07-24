@@ -11,6 +11,10 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        await supabase.auth.signInAnonymously();
+      }
       await new Promise(r => setTimeout(r, 2000));
 
       // TODO: Re-enable auth check before final submission

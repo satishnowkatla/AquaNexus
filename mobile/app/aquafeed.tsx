@@ -26,6 +26,7 @@ interface SavedSchedule {
   feed_grade: string;
   morning_kg: number;
   evening_kg: number;
+  start_date: string;
   created_at: string;
 }
 
@@ -40,6 +41,7 @@ export default function AquaFeedScreen() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FeedResult | null>(null);
   const [saved, setSaved] = useState<SavedSchedule[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => { loadSaved(); }, []);
 
@@ -179,14 +181,54 @@ export default function AquaFeedScreen() {
 
         {saved.length > 0 && (
           <>
-            <Text style={[s.sectionTitle, { marginTop: theme.spacing.xl }]}>Recent Schedules</Text>
-            {saved.map(sch => (
-              <View key={sch.id} style={s.historyCard}>
-                <Text style={s.histFeed}>{sch.feed_type}</Text>
-                <Text style={s.histDetail}>{sch.total_daily_kg} kg/day • ₹{sch.cumulative_cost}/day</Text>
-                <Text style={s.histDate}>{new Date(sch.created_at).toLocaleDateString()}</Text>
-              </View>
-            ))}
+            <Text style={[s.sectionTitle, { marginTop: theme.spacing.xl }]}>Saved Schedules</Text>
+            {saved.map(sch => {
+              const isExpanded = expandedId === sch.id;
+              const morningPct = sch.total_daily_kg > 0 ? 35 : 0;
+              const eveningPct = sch.total_daily_kg > 0 ? 65 : 0;
+              return (
+                <TouchableOpacity key={sch.id} style={s.historyCard} onPress={() => setExpandedId(isExpanded ? null : sch.id)} activeOpacity={0.7}>
+                  <View style={s.histHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.histFeed}>{sch.feed_type}</Text>
+                      <Text style={s.histGrade}>{sch.feed_grade}</Text>
+                    </View>
+                    <Text style={s.histArrow}>{isExpanded ? '▲' : '▼'}</Text>
+                  </View>
+                  <View style={s.histSummary}>
+                    <View style={s.histStat}>
+                      <Text style={s.histStatVal}>{sch.total_daily_kg} kg</Text>
+                      <Text style={s.histStatLabel}>Daily Feed</Text>
+                    </View>
+                    <View style={s.histStat}>
+                      <Text style={[s.histStatVal, { color: theme.colors.danger }]}>₹{sch.cumulative_cost}</Text>
+                      <Text style={s.histStatLabel}>Daily Cost</Text>
+                    </View>
+                    <View style={s.histStat}>
+                      <Text style={[s.histStatVal, { color: theme.colors.danger }]}>₹{(sch.cumulative_cost * 30).toLocaleString()}</Text>
+                      <Text style={s.histStatLabel}>Monthly</Text>
+                    </View>
+                  </View>
+                  {isExpanded && (
+                    <View style={s.histExpanded}>
+                      <View style={s.histDivider} />
+                      <Text style={s.histDetailTitle}>Today's Feeding Plan</Text>
+                      <View style={s.histPlanRow}>
+                        <Text style={s.histPlanTime}>🌅 Morning</Text>
+                        <Text style={s.histPlanKg}>{sch.morning_kg} kg (35%)</Text>
+                      </View>
+                      <View style={s.histPlanRow}>
+                        <Text style={s.histPlanTime}>🌆 Evening</Text>
+                        <Text style={s.histPlanKg}>{sch.evening_kg} kg (65%)</Text>
+                      </View>
+                      <View style={s.histDivider} />
+                      <Text style={s.histTips}>💡 Tips: Feed during cooler hours. Check water temperature before feeding. Reduce if uneaten food remains after 30 min.</Text>
+                      <Text style={s.histDate}>📅 Started: {sch.start_date || new Date(sch.created_at).toLocaleDateString()}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
           </>
         )}
       </ScrollView>
@@ -224,7 +266,20 @@ const s = StyleSheet.create({
   saveBtn: { backgroundColor: MODULE_COLOR, paddingVertical: theme.spacing.sm + 4, borderRadius: theme.borderRadius.md, alignItems: 'center', marginTop: theme.spacing.xl },
   saveBtnText: { color: theme.colors.white, fontSize: theme.fontSize.sm, fontWeight: '600' },
   historyCard: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
+  histHeader: { flexDirection: 'row', alignItems: 'center' },
   histFeed: { fontSize: 13, fontWeight: '600', color: theme.colors.text },
-  histDetail: { fontSize: 11, color: theme.colors.textLight, marginTop: 4 },
-  histDate: { fontSize: 11, color: theme.colors.textLight, marginTop: 2 },
+  histGrade: { fontSize: 11, color: MODULE_COLOR, marginTop: 2, fontWeight: '500' },
+  histArrow: { fontSize: 12, color: theme.colors.textLight },
+  histSummary: { flexDirection: 'row', marginTop: theme.spacing.sm, gap: theme.spacing.sm },
+  histStat: { flex: 1, alignItems: 'center' },
+  histStatVal: { fontSize: 13, fontWeight: '700', color: theme.colors.text },
+  histStatLabel: { fontSize: 10, color: theme.colors.textLight, marginTop: 2 },
+  histExpanded: { marginTop: theme.spacing.sm },
+  histDivider: { height: 1, backgroundColor: theme.colors.border, marginVertical: theme.spacing.sm },
+  histDetailTitle: { fontSize: 12, fontWeight: '700', color: theme.colors.text, marginBottom: theme.spacing.sm },
+  histPlanRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, paddingHorizontal: 8, backgroundColor: theme.colors.background, borderRadius: theme.borderRadius.sm, marginBottom: 6 },
+  histPlanTime: { fontSize: 12, fontWeight: '600', color: theme.colors.text },
+  histPlanKg: { fontSize: 12, fontWeight: '700', color: MODULE_COLOR },
+  histTips: { fontSize: 11, color: theme.colors.textLight, lineHeight: 18, marginTop: 4 },
+  histDate: { fontSize: 10, color: theme.colors.textLight, marginTop: 8 },
 });
