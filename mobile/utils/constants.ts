@@ -1,4 +1,4 @@
-export const API_URL = 'http://localhost:3000';
+export const API_URL = 'https://aquanexus-4ikz.onrender.com';
 export const API_URLS = {
   BASE: API_URL,
   AQUADOC: `${API_URL}/api/aquadoc`,
