@@ -1,8 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { theme } from '../utils/theme';
 import { MODULE_COLOR_MAP } from '../utils/moduleConfig';
 import { MOCK_VOICE_TXS, EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '../utils/mockData';
@@ -21,28 +21,29 @@ export default function AquaVoiceScreen() {
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
   const [txs, setTxs] = useState<Tx[]>(MOCK_VOICE_TXS.map(t => ({ ...t, note: t.description, time: t.date })));
-  const recRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   const startRec = async () => {
     try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: r } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recRef.current = r;
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) { Alert.alert('Permission Required', 'Microphone permission is needed for voice recording.'); return; }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setRecording(true);
     } catch { Alert.alert('Error', 'Could not start recording'); }
   };
 
   const stopRec = async () => {
-    if (!recRef.current) return;
-    await recRef.current.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    setRecording(false);
-    recRef.current = null;
-    Alert.alert('Voice Captured!', 'Detected: "Spent 5000 on feed"\n\nAdd this?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Add', onPress: () => { setAddType('expense'); setAmount('5000'); setCategory('Feed'); setShowAdd(true); } },
-    ]);
+    try {
+      recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      setRecording(false);
+      Alert.alert('Voice Captured!', 'Detected: "Spent 5000 on feed"\n\nAdd this?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Add', onPress: () => { setAddType('expense'); setAmount('5000'); setCategory('Feed'); setShowAdd(true); } },
+      ]);
+    } catch { Alert.alert('Error', 'Could not stop recording'); }
   };
 
   const save = () => {

@@ -11,8 +11,13 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user }, error } = await supabase.auth.signInAnonymously();
-      console.log('Anonymous sign-in:', user ? 'OK ' + user.id.slice(0, 8) : 'FAILED', error?.message || '');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        const { data, error } = await supabase.auth.signInAnonymously();
+        console.log('Anonymous sign-in:', data?.user ? 'OK ' + data.user.id.slice(0, 8) : 'FAILED', error?.message || '');
+      } else {
+        console.log('Existing user found:', user.id.slice(0, 8));
+      }
       await new Promise(r => setTimeout(r, 2000));
       router.replace('/(tabs)/home');
     };
