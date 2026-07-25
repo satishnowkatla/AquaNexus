@@ -31,8 +31,6 @@ export default function AquaConnectScreen() {
   const [members, setMembers] = useState<Member[]>([]);
   const [isMember, setIsMember] = useState(false);
 
-  const [debug, setDebug] = useState('');
-
   const fetchData = useCallback(async () => {
     try {
       // Fetch first cooperative directly (no auth needed - RLS disabled)
@@ -41,13 +39,11 @@ export default function AquaConnectScreen() {
         .select('id, name, district, member_count')
         .limit(1);
 
-      if (coopErr) { setDebug('coops err: ' + coopErr.message); setLoading(false); return; }
-      if (!coops || coops.length === 0) { setDebug('no cooperatives found'); setLoading(false); return; }
+      if (coopErr || !coops || coops.length === 0) { setLoading(false); return; }
 
       const coop = coops[0];
       setCooperative(coop);
       setIsMember(true);
-      setDebug('coop: ' + coop.name);
 
       // Fetch alerts and members
       const [alertsRes, membersRes] = await Promise.all([
@@ -106,8 +102,6 @@ export default function AquaConnectScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[MODULE_COLOR]} tintColor={MODULE_COLOR} />}
       >
-        <Text style={{ fontSize: 10, color: 'red', marginBottom: 8 }}>DEBUG: {debug}</Text>
-
         {!isMember ? (
           <View style={s.emptyState}>
             <Text style={s.emptyIcon}>🏘️</Text>
