@@ -1,9 +1,19 @@
-const SCRAPE_HEADERS = {
+// Market price service using NFDB FMPIS (Government of India)
+// https://fmpisnfdb.in - National Fisheries Development Board
+
+const NFDB_BASE = 'https://fmpisnfdb.in';
+const NFDB_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  'Accept': 'text/html,application/xhtml+xml',
+  'Accept': '*/*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Referer': 'https://fmpisnfdb.in/prices/dashboard',
+  'X-Requested-With': 'XMLHttpRequest',
+  'Origin': 'https://fmpisnfdb.in',
+  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
 };
 
 export interface MarketPrice {
+  id: string;
   species: string;
   variety: string;
   price_per_kg: number;
@@ -15,68 +25,145 @@ export interface MarketPrice {
   trend: string;
   data_source: string;
   unit: string;
+  species_type: string;
+}
+
+const SPECIES_TYPE_MAP: Record<string, string> = {
+  'Whiteleg Shrimp': 'shrimp',
+  'Indian nylon shrimp': 'shrimp',
+  'Kiddi shrimp': 'shrimp',
+  'Giant tiger prawn': 'prawn',
+  'Indian white prawn': 'prawn',
+  'Flower tail prawn': 'prawn',
+  'Jinga prawn': 'prawn',
+  'Blue Swimming Crab': 'crab',
+  'Flowercrab': 'crab',
+  'Green mud crab': 'crab',
+  'Spotted crab': 'crab',
+};
+
+const FRESHWATER_FISH = new Set([
+  'Rohu', 'Catla', 'Mrigal', 'Tilapia', 'Roopchand', 'Grass carp',
+  'Common carp', 'Silver carp', 'Carnatic carp', 'Reba Carp', 'Pool Barb',
+  'Murrel', 'Magur', 'Singhi', 'Pangas catfish', 'Giant catfish',
+  'Pabo Catfish', 'Indian featherback or Chital', 'Bronze Featherback',
+  'Climbing Perch', 'Giant Snakehead', 'Green Snake head', 'Assamese snake head',
+  'Indian Glassy Fish', 'Stripped Gourami', 'Tiger loach', 'Zebra Danio',
+  'Zig zag eel', 'Short fin eel', 'Rainbow Trout', 'Chocolate Mahseer',
+  'Golden Mahseer', 'Indian trout',
+]);
+
+const MARINE_FISH = new Set([
+  'Hilsa shad', 'Indian mackerel', 'Oil sardine', 'White sardine',
+  'Rainbow sardine', 'Indian anchovy', 'Malabar anchovy', 'Mustached anchovy',
+  'Pomfret', 'Silver pomfret', 'Black pomfret', 'Indian scad',
+  'Indian river shad', 'Indo-pacific seer fish', 'Narrow-barred spanish mackerel',
+  'Indo-pacific sail fish', 'Big eye thresher', 'Big eye trevally',
+  'Big eye tuna', 'Frigate tuna', 'Little tuna', 'Long tail tuna',
+  'Skipjack tuna', 'Yellowfin tuna', 'Pelagic thresher',
+  'Asian Seabass', 'Burmese King Fish', 'Indian thread fin',
+  'Four finger thread fin', 'Talang queen fish', 'Striped bonito',
+  'Torpedo scad', 'Horse Mackerel', 'Great barracuda',
+  'Pickhandle barracuda', 'Sword fish', 'Milk fish', 'Milk shark',
+  'Bearded croaker', 'Lesser tigertooth croaker', 'Spotted croaker',
+  'John\'s snapper', 'Mangrove snapper', 'Malabar grouper', 'Malabar blood snapper',
+  'Spotted croaker', 'Granulated guitar fish', 'Giant guitar fish',
+  'Spade nose shark', 'Big-eyes', 'Japanese threadfin bream',
+  'Splendid pony fish', 'Silver Belly', 'Silver sillago',
+  'Black barred half beak', 'Needle cuttle fish', 'Pharaoh cuttle fish',
+  'Spineless cuttle fish', 'Indian squid', 'Rock lobster',
+  'Flat head lobster', 'Brown mussel', 'Green mussel', 'Oyster',
+  'Spotted eagle ray', 'Smooth brass snake head',
+]);
+
+function getSpeciesType(name: string): string {
+  if (SPECIES_TYPE_MAP[name]) return SPECIES_TYPE_MAP[name];
+  if (FRESHWATER_FISH.has(name)) return 'freshwater_fish';
+  if (MARINE_FISH.has(name)) return 'marine_fish';
+  return 'other';
 }
 
 let cache: { data: MarketPrice[]; fetchedAt: number } | null = null;
 const CACHE_TTL = 3 * 60 * 60 * 1000;
 
-const AP_FISH_COMMODITIES = [
-  { slug: 'fish', name: 'Fish' },
-  { slug: 'shrimp', name: 'Shrimp' },
-  { slug: 'prawn', name: 'Prawn' },
-  { slug: 'dry-fish', name: 'Dry Fish' },
-];
+async function fetchNfdbPrices(stateId: number = 1): Promise<MarketPrice[]> {
+  const today = new Date();
+  const dateStr = `${today.getDate().toString().padStart(2, '0')}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getFullYear()}`;
 
-async function scrapeNapanta(commoditySlug: string): Promise<MarketPrice[]> {
-  try {
-    const url = `https://www.napanta.com/agri-commodity-prices/andhra-pradesh/${commoditySlug}/`;
-    const res = await fetch(url, { headers: SCRAPE_HEADERS, signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return [];
-    const html = await res.text();
+  const body = `draw=1&start=0&length=500&sid=${stateId}&market=&species=&size=&date=${dateStr}`;
+  const res = await fetch(`${NFDB_BASE}/prices/filters`, {
+    method: 'POST',
+    headers: NFDB_HEADERS as any,
+    body,
+    signal: AbortSignal.timeout(30000),
+  });
 
-    const prices: MarketPrice[] = [];
-    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-    let match;
-    while ((match = rowRegex.exec(html)) !== null) {
-      const row = match[1];
-      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-      const cells: string[] = [];
-      let cellMatch;
-      while ((cellMatch = cellRegex.exec(row)) !== null) {
-        cells.push(cellMatch[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim());
-      }
-      // Napanta table: District | Market | Commodity | Variety | Max | Avg | Min | Date | ...
-      if (cells.length >= 7) {
-        const district = cells[0];
-        const market = cells[1];
-        const species = cells[2];
-        const variety = cells[3];
-        const maxPrice = parseFloat(cells[4].replace(/[₹,\s]/g, '')) || 0;
-        const avgPrice = parseFloat(cells[5].replace(/[₹,\s]/g, '')) || 0;
-        const minPrice = parseFloat(cells[6].replace(/[₹,\s]/g, '')) || 0;
+  if (!res.ok) throw new Error(`NFDB returned ${res.status}`);
+  const json = await res.json() as any;
 
-        if (district && market && minPrice > 0) {
-          prices.push({
-            species: species || commoditySlug,
-            variety: variety || 'General',
-            price_per_kg: avgPrice / 100,
-            min_price: minPrice / 100,
-            max_price: maxPrice / 100,
-            market_name: market,
-            district,
-            price_date: cells.length > 7 ? cells[7] : new Date().toISOString().split('T')[0],
-            trend: maxPrice > minPrice * 1.05 ? 'up' : maxPrice < minPrice * 1.02 ? 'down' : 'stable',
-            data_source: 'agmarknet',
-            unit: 'per_kg',
-          });
-        }
-      }
+  if (!json.data || !Array.isArray(json.data)) return [];
+
+  // Aggregate by species: show min/max/avg across all markets
+  const speciesMap = new Map<string, {
+    prices: number[];
+    markets: Set<string>;
+    date: string;
+    variety: string;
+  }>();
+
+  for (const row of json.data) {
+    const [_, species, size, priceStr, date] = row;
+    const price = parseFloat(priceStr);
+    if (!species || isNaN(price) || price <= 0) continue;
+
+    const key = `${species}|${size}`;
+    const existing = speciesMap.get(key);
+    if (existing) {
+      existing.prices.push(price);
+      existing.date = date;
+    } else {
+      speciesMap.set(key, {
+        prices: [price],
+        markets: new Set(),
+        date,
+        variety: size,
+      });
     }
-    return prices;
-  } catch (err) {
-    console.warn(`Napanta scrape failed for ${commoditySlug}:`, err);
-    return [];
   }
+
+  const result: MarketPrice[] = [];
+  let idx = 0;
+
+  for (const [key, agg] of speciesMap) {
+    const [species, size] = key.split('|');
+    const prices = agg.prices;
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    const speciesType = getSpeciesType(species);
+
+    result.push({
+      id: `nfdb-${idx++}`,
+      species,
+      variety: size.charAt(0).toUpperCase() + size.slice(1),
+      price_per_kg: avg,
+      min_price: min,
+      max_price: max,
+      market_name: `AP Fish Markets (${prices.length} sources)`,
+      district: 'Andhra Pradesh',
+      price_date: agg.date || dateStr.split('-').reverse().join('-'),
+      trend: max > min * 1.1 ? 'up' : max < min * 0.95 ? 'down' : 'stable',
+      data_source: 'nfdb_govt',
+      unit: 'per_kg',
+      species_type: speciesType,
+    });
+  }
+
+  // Sort: shrimp/prawn first, then freshwater, then marine
+  const typeOrder: Record<string, number> = { shrimp: 0, prawn: 1, freshwater_fish: 2, crab: 3, marine_fish: 4, other: 5 };
+  result.sort((a, b) => (typeOrder[a.species_type] ?? 5) - (typeOrder[b.species_type] ?? 5) || a.species.localeCompare(b.species));
+
+  return result;
 }
 
 export async function getFishPricesInAP(): Promise<MarketPrice[]> {
@@ -84,14 +171,14 @@ export async function getFishPricesInAP(): Promise<MarketPrice[]> {
     return cache.data;
   }
 
-  const results = await Promise.all(
-    AP_FISH_COMMODITIES.map(c => scrapeNapanta(c.slug))
-  );
-  const all = results.flat();
-
-  if (all.length > 0) {
-    cache = { data: all, fetchedAt: Date.now() };
-    return all;
+  try {
+    const prices = await fetchNfdbPrices(1);
+    if (prices.length > 0) {
+      cache = { data: prices, fetchedAt: Date.now() };
+      return prices;
+    }
+  } catch (err) {
+    console.warn('NFDB fetch failed:', err);
   }
 
   if (cache?.data) return cache.data;
@@ -113,7 +200,8 @@ export async function getWeatherAP(): Promise<any> {
 
 export async function getFilters(): Promise<any> {
   return {
-    commodities: AP_FISH_COMMODITIES.map(c => ({ slug: c.slug, name: c.name })),
-    districts: ['Krishna', 'Guntur', 'East Godavari', 'West Godavari', 'Nellore', 'Prakasam'],
+    source: 'NFDB FMPIS (Government of India)',
+    species_types: ['All', 'Shrimp', 'Prawn', 'Freshwater Fish', 'Marine Fish', 'Crab'],
+    state: 'Andhra Pradesh',
   };
 }
