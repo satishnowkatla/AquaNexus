@@ -3,21 +3,18 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '../utils/theme';
 import { supabase } from '../utils/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../utils/constants';
 
 export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        const { data, error } = await supabase.auth.signInAnonymously();
-        console.log('Anonymous sign-in:', data?.user ? 'OK ' + data.user.id.slice(0, 8) : 'FAILED', error?.message || '');
-      } else {
-        console.log('Existing user found:', user.id.slice(0, 8));
-      }
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          await supabase.auth.signInAnonymously();
+        }
+      } catch {}
       await new Promise(r => setTimeout(r, 2000));
       router.replace('/(tabs)/home');
     };

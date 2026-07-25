@@ -9,6 +9,7 @@ import { supabase } from '../utils/supabase';
 import { API_URL } from '../utils/constants';
 import { theme } from '../utils/theme';
 import { MODULE_COLOR_MAP } from '../utils/moduleConfig';
+import { fetchLiveAlerts, getFeedPrices } from '../utils/liveData';
 
 const MODULE_COLOR = MODULE_COLOR_MAP.aquaconnect;
 const COOP_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
@@ -38,6 +39,12 @@ type Post = {
   id: string; content: string; post_type: string;
   likes_count: number; comments_count: number;
   created_at: string; user_id: string;
+  users?: { full_name: string };
+  community_comments?: { id: string; content: string; created_at: string; users?: { full_name: string } }[];
+};
+type Comment = {
+  id: string; post_id: string; user_id: string; content: string; created_at: string;
+  users?: { full_name: string };
 };
 type MarketPrice = {
   id: string; species: string; variety: string;
@@ -88,12 +95,15 @@ export default function AquaConnectScreen() {
   const [alertDistrict, setAlertDistrict] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [dataSource, setDataSource] = useState<string>('');
+  const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [commenting, setCommenting] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       // Fetch community data from Supabase + weather directly
       const [postsRes, membersRes, alertsRes, weatherRes] = await Promise.all([
-        supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
+        supabase.from('community_posts').select('*, users(full_name), community_comments(id, content, created_at, users(full_name))').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
         supabase.from('users').select('id, full_name, phone, role, created_at, profiles(district, village, pincode, primary_species, total_pond_area, years_experience), ponds(id, name, area_acres, species, stocking_density, stocking_date, expected_harvest_date, status)').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
         fetch('https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7').then(r => r.json()).catch(() => null),
@@ -160,16 +170,16 @@ export default function AquaConnectScreen() {
         }
       }
 
-      // Fetch live alerts and feed prices from backend
+      // Fetch live alerts + feed prices directly (no backend needed)
       try {
-        const [alertsRes, feedRes] = await Promise.all([
-          fetch(`${API_URL}/api/alerts/daily`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => null),
-          fetch(`${API_URL}/api/alerts/feed-prices`, { signal: AbortSignal.timeout(10000) }).then(r => r.json()).catch(() => null),
+        const [liveAlertData, feedData] = await Promise.all([
+          fetchLiveAlerts().catch(() => []),
+          Promise.resolve(getFeedPrices()),
         ]);
-        if (alertsRes?.success && alertsRes.data) setLiveAlerts(alertsRes.data);
-        if (feedRes?.success && feedRes.data) setFeedPrices(feedRes.data);
+        setLiveAlerts(liveAlertData);
+        setFeedPrices(feedData);
       } catch {
-        // Backend unavailable for alerts/feed
+        // Fallback: empty data
       }
     } catch (err) {
       console.warn('AquaConnect error:', err);
@@ -180,6 +190,21 @@ export default function AquaConnectScreen() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Real-time subscription to community_posts
+  useEffect(() => {
+    const channel = supabase
+      .channel('community_posts_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_posts' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_comments' }, () => {
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchData]);
+
   const onRefresh = () => { setRefreshing(true); fetchData(); };
 
   const handlePost = async () => {
@@ -200,6 +225,21 @@ export default function AquaConnectScreen() {
   const handleLike = async (postId: string, currentLikes: number) => {
     await supabase.from('community_posts').update({ likes_count: currentLikes + 1 }).eq('id', postId);
     setPosts(prev => prev.map(p => p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p));
+  };
+
+  const handleComment = async (postId: string) => {
+    if (!commentText.trim()) return;
+    setCommenting(postId);
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || '00000000-0000-0000-0000-000000000000';
+    await supabase.from('community_comments').insert({
+      post_id: postId, user_id: userId, content: commentText.trim(),
+    });
+    const { count } = await supabase.from('community_comments').select('*', { count: 'exact', head: true }).eq('post_id', postId);
+    await supabase.from('community_posts').update({ comments_count: count || 0 }).eq('id', postId);
+    setCommentText('');
+    setCommenting(null);
+    fetchData();
   };
 
   const formatTime = (dateStr: string) => {
@@ -255,29 +295,73 @@ export default function AquaConnectScreen() {
             <TouchableOpacity style={[s.newPostBtn, { backgroundColor: MODULE_COLOR }]} onPress={() => setShowNewPost(true)}>
               <Text style={s.newPostText}>+ New Post</Text>
             </TouchableOpacity>
+            <Text style={s.sectionSub}>{posts.length} posts in your cooperative</Text>
             {posts.length === 0 && <Text style={s.emptyTab}>No posts yet. Be the first to share!</Text>}
-            {posts.map(p => (
-              <View key={p.id} style={s.postCard}>
-                <View style={s.postHeader}>
-                  <View style={[s.postBadge, { backgroundColor: POST_COLORS[p.post_type] + '20' }]}>
-                    <Text style={{ fontSize: 14 }}>{POST_ICONS[p.post_type]}</Text>
+            {posts.map(p => {
+              const author = p.users?.full_name || 'Anonymous Farmer';
+              const isOpen = expandedPost === p.id;
+              const comments = p.community_comments || [];
+              return (
+                <View key={p.id} style={s.postCard}>
+                  <View style={s.postHeader}>
+                    <View style={[s.postBadge, { backgroundColor: POST_COLORS[p.post_type] + '20' }]}>
+                      <Text style={{ fontSize: 14 }}>{POST_ICONS[p.post_type]}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={s.postAuthor}>{author}</Text>
+                        <Text style={[s.postTypeBadge, { backgroundColor: POST_COLORS[p.post_type] + '15', color: POST_COLORS[p.post_type] }]}>
+                          {p.post_type.charAt(0).toUpperCase() + p.post_type.slice(1)}
+                        </Text>
+                      </View>
+                      <Text style={s.postTime}>{formatTime(p.created_at)}</Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.postType}>{p.post_type.charAt(0).toUpperCase() + p.post_type.slice(1)}</Text>
-                    <Text style={s.postTime}>{formatTime(p.created_at)}</Text>
+                  <Text style={s.postContent}>{p.content}</Text>
+                  <View style={s.postActions}>
+                    <TouchableOpacity style={s.postAction} onPress={() => handleLike(p.id, p.likes_count)}>
+                      <Text style={s.postActionText}>👍 {p.likes_count}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.postAction} onPress={() => setExpandedPost(isOpen ? null : p.id)}>
+                      <Text style={s.postActionText}>💬 {p.comments_count} {isOpen ? 'Hide' : 'Comment'}</Text>
+                    </TouchableOpacity>
                   </View>
+
+                  {isOpen && (
+                    <View style={s.commentsSection}>
+                      {comments.length === 0 && <Text style={s.noCommentsText}>No comments yet. Start the conversation!</Text>}
+                      {comments.map(c => (
+                        <View key={c.id} style={s.commentItem}>
+                          <View style={s.commentDot} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.commentAuthor}>{c.users?.full_name || 'Farmer'}</Text>
+                            <Text style={s.commentText}>{c.content}</Text>
+                            <Text style={s.commentTime}>{formatTime(c.created_at)}</Text>
+                          </View>
+                        </View>
+                      ))}
+                      <View style={s.commentInputRow}>
+                        <TextInput
+                          style={s.commentInput}
+                          placeholder="Write a comment..."
+                          placeholderTextColor={theme.colors.textLight}
+                          value={commentText}
+                          onChangeText={setCommentText}
+                          multiline
+                        />
+                        <TouchableOpacity
+                          style={[s.commentSubmit, { backgroundColor: MODULE_COLOR, opacity: (!commentText.trim() || commenting === p.id) ? 0.5 : 1 }]}
+                          onPress={() => handleComment(p.id)}
+                          disabled={!commentText.trim() || commenting === p.id}
+                        >
+                          <Text style={s.commentSubmitText}>{commenting === p.id ? '...' : 'Send'}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                 </View>
-                <Text style={s.postContent}>{p.content}</Text>
-                <View style={s.postActions}>
-                  <TouchableOpacity style={s.postAction} onPress={() => handleLike(p.id, p.likes_count)}>
-                    <Text style={s.postActionText}>👍 {p.likes_count}</Text>
-                  </TouchableOpacity>
-                  <View style={s.postAction}>
-                    <Text style={s.postActionText}>💬 {p.comments_count}</Text>
-                  </View>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </>
         )}
 
@@ -742,11 +826,17 @@ export default function AquaConnectScreen() {
               </>
             )}
 
-            {liveAlerts.length === 0 && (
+            {liveAlerts.length === 0 && loading && (
+              <View style={s.noDataCard}>
+                <ActivityIndicator size="small" color={MODULE_COLOR} />
+                <Text style={[s.noDataTitle, { marginTop: theme.spacing.sm }]}>Fetching weather data from 8 AP districts...</Text>
+              </View>
+            )}
+            {liveAlerts.length === 0 && !loading && (
               <View style={s.noDataCard}>
                 <Text style={s.noDataIcon}>📡</Text>
-                <Text style={s.noDataTitle}>Loading live alerts...</Text>
-                <Text style={s.noDataDesc}>Fetching weather data from 8 AP districts</Text>
+                <Text style={s.noDataTitle}>No alerts right now</Text>
+                <Text style={s.noDataDesc}>All clear across AP districts. Pull down to refresh.</Text>
               </View>
             )}
 
@@ -856,12 +946,27 @@ const s = StyleSheet.create({
   postCard: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
   postHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
   postBadge: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm },
+  postAuthor: { fontSize: 13, fontWeight: '700', color: theme.colors.text },
+  postTypeBadge: { fontSize: 10, fontWeight: '600', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   postType: { fontSize: 12, fontWeight: '600', color: theme.colors.text },
   postTime: { fontSize: 11, color: theme.colors.textLight },
   postContent: { fontSize: 14, color: theme.colors.text, lineHeight: 22 },
   postActions: { flexDirection: 'row', marginTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.sm },
   postAction: { marginRight: theme.spacing.md },
   postActionText: { fontSize: 12, color: theme.colors.textLight },
+
+  // Comments
+  commentsSection: { marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  noCommentsText: { fontSize: 12, color: theme.colors.textLight, textAlign: 'center', paddingVertical: 8 },
+  commentItem: { flexDirection: 'row', paddingVertical: 6, gap: 8 },
+  commentDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: MODULE_COLOR, marginTop: 5 },
+  commentAuthor: { fontSize: 12, fontWeight: '700', color: theme.colors.text },
+  commentText: { fontSize: 13, color: theme.colors.text, lineHeight: 18, marginTop: 2 },
+  commentTime: { fontSize: 10, color: theme.colors.textLight, marginTop: 2 },
+  commentInputRow: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'flex-end' },
+  commentInput: { flex: 1, borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.sm, padding: 8, fontSize: 13, color: theme.colors.text, maxHeight: 60, textAlignVertical: 'top' },
+  commentSubmit: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.borderRadius.sm },
+  commentSubmitText: { fontSize: 12, color: theme.colors.white, fontWeight: '600' },
 
   // Market
   marketHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
