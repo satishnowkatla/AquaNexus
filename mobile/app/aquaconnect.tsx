@@ -31,27 +31,36 @@ export default function AquaConnectScreen() {
   const [members, setMembers] = useState<Member[]>([]);
   const [isMember, setIsMember] = useState(false);
 
+  const [debug, setDebug] = useState('');
+
   const joinCooperative = async (coopId: string, userId: string) => {
-    // Upsert user into users table first (needed for foreign key)
-    await supabase.from('users').upsert({ id: userId, phone: `dev-${userId.slice(0, 8)}`, full_name: 'Dev User' }, { onConflict: 'id' });
-    await supabase.from('cooperative_members').insert({ cooperative_id: coopId, user_id: userId });
+    const { error: userErr } = await supabase.from('users').upsert({ id: userId, phone: `dev-${userId.slice(0, 8)}`, full_name: 'Dev User' }, { onConflict: 'id' });
+    if (userErr) { setDebug('user upsert: ' + userErr.message); return; }
+    const { error: memberErr } = await supabase.from('cooperative_members').insert({ cooperative_id: coopId, user_id: userId });
+    if (memberErr) { setDebug('member insert: ' + memberErr.message); return; }
   };
 
   const fetchData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) { setDebug('no user'); return; }
+      setDebug('user: ' + user.id.slice(0, 8));
 
       // Check membership
-      let { data: membership } = await supabase
+      let { data: membership, error: memErr } = await supabase
         .from('cooperative_members')
         .select('cooperative_id')
         .eq('user_id', user.id)
         .maybeSingle();
 
+      if (memErr) { setDebug('coop query: ' + memErr.message); return; }
+      setDebug('membership: ' + JSON.stringify(membership));
+
       // Auto-join first available cooperative if not a member
       if (!membership) {
-        const { data: coops } = await supabase.from('cooperatives').select('id').limit(1);
+        const { data: coops, error: coopErr } = await supabase.from('cooperatives').select('id').limit(1);
+        if (coopErr) { setDebug('coop list: ' + coopErr.message); return; }
+        setDebug('coops found: ' + (coops?.length || 0));
         if (coops && coops.length > 0) {
           await joinCooperative(coops[0].id, user.id);
           membership = { cooperative_id: coops[0].id };
@@ -135,6 +144,8 @@ export default function AquaConnectScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[MODULE_COLOR]} tintColor={MODULE_COLOR} />}
       >
+        <Text style={{ fontSize: 10, color: 'red', marginBottom: 8 }}>DEBUG: {debug}</Text>
+
         {!isMember ? (
           <View style={s.emptyState}>
             <Text style={s.emptyIcon}>🏘️</Text>
