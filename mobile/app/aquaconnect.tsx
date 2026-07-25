@@ -13,6 +13,22 @@ import { MODULE_COLOR_MAP } from '../utils/moduleConfig';
 const MODULE_COLOR = MODULE_COLOR_MAP.aquaconnect;
 const COOP_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
+function classifySpecies(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('shrimp') || n.includes('vannamei') || n.includes('whiteleg')) return 'shrimp';
+  if (n.includes('prawn') || n.includes('tiger') && n.includes('prawn')) return 'prawn';
+  if (n.includes('crab') || n.includes('lobster') || n.includes('mussel') || n.includes('oyster')) return 'crab';
+  const fw = ['rohu', 'catla', 'mrigal', 'tilapia', 'roopchand', 'carp', 'murrel', 'magur',
+    'pangas', 'featherback', 'snakehead', 'gourami', 'trout', 'mahseer', 'barb', 'anabas', 'channa'];
+  if (fw.some(k => n.includes(k))) return 'freshwater_fish';
+  const mw = ['mackerel', 'sardine', 'anchovy', 'pomfret', 'tuna', 'seer', 'king fish',
+    'kingfish', 'barracuda', 'shark', 'grouper', 'snapper', 'trevally', 'hilsa',
+    'milkfish', 'croaker', 'threadfin', 'seabass', 'sea bass'];
+  if (mw.some(k => n.includes(k))) return 'marine_fish';
+  if (n.includes('fish') || n.includes('mathi') || n.includes('nethili')) return 'marine_fish';
+  return 'other';
+}
+
 const POST_ICONS: Record<string, string> = { question: '❓', tip: '💡', alert: '⚠️', general: '💬' };
 const POST_COLORS: Record<string, string> = { question: theme.colors.blue, tip: theme.colors.green, alert: theme.colors.red, general: theme.colors.textLight };
 const TREND_ICONS: Record<string, string> = { up: '↑', down: '↓', stable: '→' };
@@ -98,7 +114,7 @@ export default function AquaConnectScreen() {
               trend: p.trend,
               data_source: p.data_source || 'nfdb_govt',
               unit: p.unit || 'per_kg',
-              species_type: p.species_type || 'other',
+              species_type: p.species_type || classifySpecies(p.species || ''),
             }));
             setPrices(mapped);
             gotLivePrices = true;
@@ -115,13 +131,18 @@ export default function AquaConnectScreen() {
       if (!gotLivePrices) {
         const pricesRes = await supabase.from('market_prices').select('*').order('price_date', { ascending: false }).order('species').limit(50);
         if (pricesRes.data) {
-          setPrices(pricesRes.data);
-          if (pricesRes.data.length > 0) {
-            const latest = pricesRes.data[0]?.price_date;
+          const withTypes = pricesRes.data.map((p: any) => ({
+            ...p,
+            species_type: p.species_type || classifySpecies(p.species || ''),
+          }));
+          setPrices(withTypes);
+          if (withTypes.length > 0) {
+            const latest = withTypes[0]?.price_date;
             if (latest) {
               const d = new Date(latest);
               setLastUpdated(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }));
             }
+            setDataSource(dataSource || 'Supabase (Benchmark)');
           }
         }
       }
