@@ -49,7 +49,8 @@ type MarketPrice = {
 type Member = {
   id: string; full_name: string; phone: string;
   role: string; created_at: string;
-  profiles?: { district?: string; village?: string; primary_species?: string; total_pond_area?: number; years_experience?: number }[];
+  profiles?: { district?: string; village?: string; pincode?: string; primary_species?: string; total_pond_area?: number; years_experience?: number }[];
+  ponds?: { id: string; name: string; area_acres: number; species: string; stocking_density?: number; stocking_date?: string; expected_harvest_date?: string; status?: string }[];
 };
 type Alert = {
   id: string; title: string; message: string;
@@ -74,6 +75,8 @@ export default function AquaConnectScreen() {
   const [selectedSpeciesType, setSelectedSpeciesType] = useState<string>('all');
   const [selectedMarket, setSelectedMarket] = useState<string>('all');
   const [marketList, setMarketList] = useState<Array<{ id: number; name: string; district: string }>>([]);
+  const [selectedFarmerDistrict, setSelectedFarmerDistrict] = useState<string>('all');
+  const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [dataSource, setDataSource] = useState<string>('');
 
@@ -82,7 +85,7 @@ export default function AquaConnectScreen() {
       // Fetch community data from Supabase + weather directly
       const [postsRes, membersRes, alertsRes, weatherRes] = await Promise.all([
         supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
-        supabase.from('users').select('id, full_name, phone, role, created_at, profiles(district, village, primary_species, total_pond_area, years_experience)').order('created_at', { ascending: false }),
+        supabase.from('users').select('id, full_name, phone, role, created_at, profiles(district, village, pincode, primary_species, total_pond_area, years_experience), ponds(id, name, area_acres, species, stocking_density, stocking_date, expected_harvest_date, status)').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
         fetch('https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7').then(r => r.json()).catch(() => null),
       ]);
@@ -467,97 +470,187 @@ export default function AquaConnectScreen() {
           </>
         )}
 
-        {/* MEMBERS TAB */}
+        {/* MEMBERS TAB - Fish Farmer Directory */}
         {tab === 'members' && (
           <>
-            {/* Cooperative Header */}
-            <View style={s.coopHeaderCard}>
-              <View style={s.coopHeaderTop}>
-                <View style={[s.coopLogo, { backgroundColor: MODULE_COLOR }]}>
-                  <Text style={{ fontSize: 22 }}>🐟</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.coopName}>Krishna Delta Fish Farmers</Text>
-                  <Text style={s.coopDist}>Krishna District, Andhra Pradesh</Text>
-                  <Text style={s.coopReg}>Reg. No: KDF/2024/AP-0847</Text>
-                </View>
-              </View>
-              <View style={s.coopStats}>
-                <View style={s.coopStatItem}>
-                  <Text style={s.coopStatNum}>{members.length}</Text>
-                  <Text style={s.coopStatLabel}>Members</Text>
-                </View>
-                <View style={s.coopStatDivider} />
-                <View style={s.coopStatItem}>
-                  <Text style={s.coopStatNum}>{members.reduce((sum, m) => sum + (m.profiles?.[0]?.total_pond_area || 0), 0).toFixed(1)}</Text>
-                  <Text style={s.coopStatLabel}>Total Acres</Text>
-                </View>
-                <View style={s.coopStatDivider} />
-                <View style={s.coopStatItem}>
-                  <Text style={s.coopStatNum}>{new Set(members.map(m => m.profiles?.[0]?.district).filter(Boolean)).size}</Text>
-                  <Text style={s.coopStatLabel}>Districts</Text>
-                </View>
+            <View style={s.marketHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sectionTitle}>Fish Farmer Directory</Text>
+                <Text style={s.sectionSub}>{members.length} farmers across Andhra Pradesh</Text>
               </View>
             </View>
 
-            {/* District Grouped Members */}
+            {/* District Filter */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filterContent}>
+              {(() => {
+                const districts = [...new Set(members.map(m => m.profiles?.[0]?.district).filter((d): d is string => !!d))].sort();
+                return [{ key: 'all', label: '🏛 All AP' }, ...districts.map(d => ({ key: d, label: `📍 ${d}` }))];
+              })().map(f => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[s.filterChip, selectedFarmerDistrict === f.key && { backgroundColor: MODULE_COLOR }]}
+                  onPress={() => setSelectedFarmerDistrict(f.key)}
+                >
+                  <Text style={[s.filterText, selectedFarmerDistrict === f.key && { color: theme.colors.white, fontWeight: '600' }]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Filter result count */}
             {(() => {
+              const filtered = members.filter(m => {
+                if (selectedFarmerDistrict !== 'all' && m.profiles?.[0]?.district !== selectedFarmerDistrict) return false;
+                return true;
+              });
+              const hasFilter = selectedFarmerDistrict !== 'all';
+              return (
+                <View style={s.resultCountRow}>
+                  <Text style={s.resultCountText}>Showing {filtered.length} of {members.length} farmers</Text>
+                  {hasFilter && (
+                    <TouchableOpacity onPress={() => setSelectedFarmerDistrict('all')}>
+                      <Text style={s.clearAllText}>Clear filter</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })()}
+
+            {members.length === 0 && <Text style={s.emptyTab}>No farmers found. Run the seed SQL in Supabase.</Text>}
+
+            {/* Farmer Cards grouped by district */}
+            {(() => {
+              const filtered = members.filter(m => {
+                if (selectedFarmerDistrict !== 'all' && m.profiles?.[0]?.district !== selectedFarmerDistrict) return false;
+                return true;
+              });
+
+              if (filtered.length === 0 && members.length > 0) {
+                return (
+                  <View style={s.noDataCard}>
+                    <Text style={s.noDataIcon}>🔍</Text>
+                    <Text style={s.noDataTitle}>No farmers in this district</Text>
+                    <Text style={s.noDataDesc}>Try selecting a different district.</Text>
+                    <TouchableOpacity style={[s.clearFiltersBtn, { backgroundColor: MODULE_COLOR }]} onPress={() => setSelectedFarmerDistrict('all')}>
+                      <Text style={s.clearFiltersBtnText}>Show all farmers</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+
               const speciesEmoji: Record<string, string> = { shrimp: '🦐', prawn: '🦞', fish: '🐟' };
               const speciesLabel: Record<string, string> = { shrimp: 'Shrimp', prawn: 'Prawn', fish: 'Fish' };
+
               const grouped: Record<string, Member[]> = {};
-              members.forEach(m => {
+              filtered.forEach(m => {
                 const dist = m.profiles?.[0]?.district || 'Other';
                 if (!grouped[dist]) grouped[dist] = [];
                 grouped[dist].push(m);
               });
-              const sortedDistricts = Object.keys(grouped).sort();
 
-              if (members.length === 0) return <Text style={s.emptyTab}>No members found. Run the seed SQL in Supabase.</Text>;
-
-              return sortedDistricts.map(district => (
+              return Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0])).map(([district, farmers]) => (
                 <View key={district}>
                   <View style={s.districtHeader}>
                     <Text style={s.districtHeaderText}>📍 {district}</Text>
-                    <Text style={s.districtCount}>{grouped[district].length} members</Text>
+                    <Text style={s.districtCount}>{farmers.length} farmer{farmers.length > 1 ? 's' : ''}</Text>
                   </View>
-                  {grouped[district].map((m, i) => {
+                  {farmers.map((m, i) => {
                     const profile = m.profiles?.[0];
+                    const ponds = m.ponds || [];
+                    const isExpanded = expandedFarmer === m.id;
+                    const activePonds = ponds.filter(p => p.status === 'active');
+                    const totalPondArea = ponds.reduce((sum, p) => sum + (p.area_acres || 0), 0);
+
                     return (
-                      <View key={m.id || i} style={s.memberDirCard}>
-                        <View style={s.memberDirTop}>
-                          <View style={[s.memberDirAvatar, { backgroundColor: MODULE_COLOR }]}>
-                            <Text style={s.memberDirAvatarText}>{m.full_name?.charAt(0) || '?'}</Text>
+                      <TouchableOpacity
+                        key={m.id || i}
+                        style={s.farmerCard}
+                        activeOpacity={0.7}
+                        onPress={() => setExpandedFarmer(isExpanded ? null : m.id)}
+                      >
+                        {/* Farmer Header */}
+                        <View style={s.farmerTop}>
+                          <View style={[s.farmerAvatar, { backgroundColor: MODULE_COLOR }]}>
+                            <Text style={s.farmerAvatarText}>{m.full_name?.charAt(0) || '?'}</Text>
                           </View>
                           <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                              <Text style={s.memberDirName}>{m.full_name}</Text>
+                              <Text style={s.farmerName}>{m.full_name}</Text>
                               {m.role === 'cooperative' && (
-                                <View style={[s.leaderBadge]}>
-                                  <Text style={s.leaderBadgeText}>⭐ Leader</Text>
-                                </View>
+                                <View style={[s.leaderBadge]}><Text style={s.leaderBadgeText}>⭐ Leader</Text></View>
                               )}
                             </View>
-                            <Text style={s.memberDirPhone}>{m.phone}</Text>
+                            <Text style={s.farmerPhone}>📱 {m.phone}</Text>
+                            {profile && (
+                              <Text style={s.farmerLocation}>📍 {profile.village}{profile.pincode ? `, ${profile.pincode}` : ''}</Text>
+                            )}
                           </View>
-                          <TouchableOpacity style={[s.memberDirCall, { backgroundColor: MODULE_COLOR }]} onPress={() => Linking.openURL(`tel:${m.phone}`)}>
-                            <Text style={s.memberDirCallText}>📞 Call</Text>
+                          <TouchableOpacity style={[s.memberDirCall, { backgroundColor: MODULE_COLOR }]} onPress={(e) => { e.stopPropagation?.(); Linking.openURL(`tel:${m.phone}`); }}>
+                            <Text style={s.memberDirCallText}>📞</Text>
                           </TouchableOpacity>
                         </View>
+
+                        {/* Quick Stats Row */}
                         {profile && (
-                          <View style={s.memberDirDetails}>
-                            <View style={s.memberDirDetailRow}>
-                              <Text style={s.memberDirDetailItem}>📍 {profile.village || '--'}</Text>
+                          <View style={s.farmerStats}>
+                            <View style={s.farmerStatItem}>
+                              <Text style={s.farmerStatIcon}>{speciesEmoji[profile.primary_species || ''] || '🐟'}</Text>
+                              <Text style={s.farmerStatValue}>{speciesLabel[profile.primary_species || ''] || profile.primary_species || '--'}</Text>
                             </View>
-                            <View style={s.memberDirDetailRow}>
-                              <Text style={s.memberDirDetailItem}>
-                                {speciesEmoji[profile.primary_species || ''] || '🐟'} {speciesLabel[profile.primary_species || ''] || profile.primary_species || '--'}
-                              </Text>
-                              <Text style={s.memberDirDetailItem}>🏞 {profile.total_pond_area || '--'} acres</Text>
-                              <Text style={s.memberDirDetailItem}>🕐 {profile.years_experience || '--'} yrs</Text>
+                            <View style={s.farmerStatItem}>
+                              <Text style={s.farmerStatIcon}>🏞</Text>
+                              <Text style={s.farmerStatValue}>{totalPondArea > 0 ? `${totalPondArea} ac` : profile.total_pond_area ? `${profile.total_pond_area} ac` : '--'}</Text>
+                            </View>
+                            <View style={s.farmerStatItem}>
+                              <Text style={s.farmerStatIcon}>🕐</Text>
+                              <Text style={s.farmerStatValue}>{profile.years_experience ? `${profile.years_experience} yrs` : '--'}</Text>
+                            </View>
+                            <View style={s.farmerStatItem}>
+                              <Text style={s.farmerStatIcon}>🐟</Text>
+                              <Text style={s.farmerStatValue}>{activePonds.length} pond{activePonds.length !== 1 ? 's' : ''}</Text>
                             </View>
                           </View>
                         )}
-                      </View>
+
+                        {/* Expanded Pond Details */}
+                        {isExpanded && ponds.length > 0 && (
+                          <View style={s.farmerPondsSection}>
+                            <View style={s.pondsSectionHeader}>
+                              <Text style={s.pondsSectionTitle}>Pond Details</Text>
+                              <Text style={s.pondsSectionSub}>{activePonds.length} active of {ponds.length} total</Text>
+                            </View>
+                            {ponds.map(pond => (
+                              <View key={pond.id} style={[s.pondCard, pond.status !== 'active' && { opacity: 0.5 }]}>
+                                <View style={s.pondCardHeader}>
+                                  <Text style={s.pondName}>{pond.name}</Text>
+                                  <View style={[s.pondStatusBadge, { backgroundColor: pond.status === 'active' ? theme.colors.green + '20' : theme.colors.grey[200] }]}>
+                                    <Text style={[s.pondStatusText, { color: pond.status === 'active' ? theme.colors.green : theme.colors.textLight }]}>
+                                      {pond.status === 'active' ? '● Active' : pond.status}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <View style={s.pondDetailsGrid}>
+                                  <Text style={s.pondDetailItem}>🏞 {pond.area_acres} acres</Text>
+                                  <Text style={s.pondDetailItem}>{speciesEmoji[pond.species?.toLowerCase().includes('shrimp') ? 'shrimp' : pond.species?.toLowerCase().includes('prawn') ? 'prawn' : 'fish'] || '🐟'} {pond.species}</Text>
+                                </View>
+                                {pond.stocking_density && (
+                                  <Text style={s.pondDetailItem}>📊 Stocking: {pond.stocking_density.toLocaleString()}/acre</Text>
+                                )}
+                                <View style={s.pondDatesRow}>
+                                  {pond.stocking_date && <Text style={s.pondDateItem}>📅 Stocked: {new Date(pond.stocking_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>}
+                                  {pond.expected_harvest_date && <Text style={s.pondDateItem}>🎯 Harvest: {new Date(pond.expected_harvest_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>}
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {/* Expand hint */}
+                        <View style={s.expandHint}>
+                          <Text style={s.expandHintText}>{isExpanded ? '▲ Tap to collapse' : `▼ ${ponds.length > 0 ? `View ${ponds.length} pond${ponds.length > 1 ? 's' : ''}` : 'No ponds added'}`}</Text>
+                        </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -683,34 +776,40 @@ const s = StyleSheet.create({
   trendBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.borderRadius.sm, marginTop: 4 },
   trendText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
 
-  // Members - Cooperative Directory
-  coopHeaderCard: { backgroundColor: MODULE_COLOR + '08', borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: MODULE_COLOR + '30' },
-  coopHeaderTop: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
-  coopLogo: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm + 4 },
-  coopName: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
-  coopDist: { fontSize: 12, color: theme.colors.textLight, marginTop: 1 },
-  coopReg: { fontSize: 10, color: MODULE_COLOR, marginTop: 2, fontWeight: '600' },
-  coopStats: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.sm },
-  coopStatItem: { alignItems: 'center', flex: 1 },
-  coopStatNum: { fontSize: 18, fontWeight: '800', color: MODULE_COLOR },
-  coopStatLabel: { fontSize: 10, color: theme.colors.textLight, marginTop: 2 },
-  coopStatDivider: { width: 1, backgroundColor: theme.colors.border, marginVertical: 2 },
+  // Members - Fish Farmer Directory
   districtHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: theme.spacing.sm, paddingHorizontal: 2, marginBottom: theme.spacing.xs },
   districtHeaderText: { fontSize: 13, fontWeight: '700', color: theme.colors.text, textTransform: 'uppercase', letterSpacing: 0.5 },
   districtCount: { fontSize: 11, color: theme.colors.textLight },
-  memberDirCard: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
-  memberDirTop: { flexDirection: 'row', alignItems: 'center' },
-  memberDirAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm },
-  memberDirAvatarText: { fontSize: 18, fontWeight: '700', color: theme.colors.white },
-  memberDirName: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
+  farmerCard: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
+  farmerTop: { flexDirection: 'row', alignItems: 'center' },
+  farmerAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm },
+  farmerAvatarText: { fontSize: 18, fontWeight: '700', color: theme.colors.white },
+  farmerName: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
   leaderBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: theme.colors.amber + '20' },
   leaderBadgeText: { fontSize: 10, fontWeight: '600', color: theme.colors.amber },
-  memberDirPhone: { fontSize: 12, color: theme.colors.textLight, marginTop: 2, fontWeight: '500' },
+  farmerPhone: { fontSize: 12, color: theme.colors.text, marginTop: 2, fontWeight: '600' },
+  farmerLocation: { fontSize: 11, color: theme.colors.textLight, marginTop: 1 },
+  farmerStats: { flexDirection: 'row', justifyContent: 'space-around', marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  farmerStatItem: { alignItems: 'center' },
+  farmerStatIcon: { fontSize: 16, marginBottom: 2 },
+  farmerStatValue: { fontSize: 11, color: theme.colors.textLight, fontWeight: '600' },
+  farmerPondsSection: { marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  pondsSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.spacing.sm },
+  pondsSectionTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.text },
+  pondsSectionSub: { fontSize: 11, color: theme.colors.textLight },
+  pondCard: { backgroundColor: theme.colors.grey[50], borderRadius: theme.borderRadius.sm, padding: theme.spacing.sm, marginBottom: theme.spacing.xs, borderWidth: 1, borderColor: theme.colors.border },
+  pondCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  pondName: { fontSize: 13, fontWeight: '600', color: theme.colors.text },
+  pondStatusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  pondStatusText: { fontSize: 10, fontWeight: '600' },
+  pondDetailsGrid: { flexDirection: 'row', gap: 12, marginBottom: 3 },
+  pondDetailItem: { fontSize: 12, color: theme.colors.textLight },
+  pondDatesRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  pondDateItem: { fontSize: 11, color: theme.colors.textLight },
+  expandHint: { marginTop: theme.spacing.sm, alignItems: 'center' },
+  expandHintText: { fontSize: 11, color: MODULE_COLOR, fontWeight: '500' },
   memberDirCall: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.sm },
-  memberDirCallText: { color: theme.colors.white, fontSize: 11, fontWeight: '600' },
-  memberDirDetails: { marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border },
-  memberDirDetailRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 3 },
-  memberDirDetailItem: { fontSize: 12, color: theme.colors.textLight },
+  memberDirCallText: { color: theme.colors.white, fontSize: 16, fontWeight: '600' },
 
   // Alerts
   alertCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
