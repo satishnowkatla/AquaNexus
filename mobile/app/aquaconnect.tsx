@@ -318,7 +318,35 @@ export default function AquaConnectScreen() {
               ))}
             </ScrollView>
 
-            {prices.length === 0 && <Text style={s.emptyTab}>No prices available today</Text>}
+            {/* Filter result count */}
+            {prices.length > 0 && (() => {
+              const filtered = prices.filter(p => {
+                if (selectedSpeciesType !== 'all' && p.species_type !== selectedSpeciesType) return false;
+                if (selectedDistrict !== 'all' && p.district !== selectedDistrict) return false;
+                return true;
+              });
+              const hasActiveFilters = selectedSpeciesType !== 'all' || selectedDistrict !== 'all';
+              return (
+                <View style={s.resultCountRow}>
+                  <Text style={s.resultCountText}>
+                    Showing {filtered.length} of {prices.length} prices
+                  </Text>
+                  {hasActiveFilters && (
+                    <TouchableOpacity onPress={() => { setSelectedSpeciesType('all'); setSelectedDistrict('all'); }}>
+                      <Text style={s.clearAllText}>Clear all</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })()}
+
+            {prices.length === 0 && (
+              <View style={s.noDataCard}>
+                <Text style={s.noDataIcon}>📡</Text>
+                <Text style={s.noDataTitle}>No market data available</Text>
+                <Text style={s.noDataDesc}>NFDB prices couldn't be loaded right now. Pull down to refresh.</Text>
+              </View>
+            )}
 
             {/* Group prices by species */}
             {(() => {
@@ -342,16 +370,23 @@ export default function AquaConnectScreen() {
                 other: '🐟 Fish',
               };
 
-              if (Object.keys(grouped).length === 0 && prices.length > 0) {
+              if (prices.length > 0 && Object.keys(grouped).length === 0) {
                 return (
-                  <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-                    <Text style={{ fontSize: 14, color: theme.colors.textLight }}>No results for current filters</Text>
-                    <TouchableOpacity onPress={() => { setSelectedSpeciesType('all'); setSelectedDistrict('all'); }} style={{ marginTop: 8 }}>
-                      <Text style={{ fontSize: 13, color: MODULE_COLOR, fontWeight: '600' }}>Clear filters</Text>
+                  <View style={s.noDataCard}>
+                    <Text style={s.noDataIcon}>🔍</Text>
+                    <Text style={s.noDataTitle}>No results match your filters</Text>
+                    <Text style={s.noDataDesc}>Try a different species type or district combination.</Text>
+                    <TouchableOpacity
+                      style={[s.clearFiltersBtn, { backgroundColor: MODULE_COLOR }]}
+                      onPress={() => { setSelectedSpeciesType('all'); setSelectedDistrict('all'); }}
+                    >
+                      <Text style={s.clearFiltersBtnText}>Clear all filters</Text>
                     </TouchableOpacity>
                   </View>
                 );
               }
+
+              if (Object.keys(grouped).length === 0) return null;
 
               const sortedEntries = Object.entries(grouped).sort((a, b) => {
                 const typeA = a[1][0]?.species_type || 'other';
@@ -520,6 +555,15 @@ const s = StyleSheet.create({
   filterContent: { gap: 8 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.colors.grey[100], borderWidth: 1, borderColor: theme.colors.border },
   filterText: { fontSize: 12, color: theme.colors.textLight, fontWeight: '500' },
+  resultCountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.sm, marginTop: 2, paddingHorizontal: 2 },
+  resultCountText: { fontSize: 12, color: theme.colors.textLight, fontWeight: '500' },
+  clearAllText: { fontSize: 12, color: MODULE_COLOR, fontWeight: '600' },
+  noDataCard: { alignItems: 'center', paddingVertical: 32, paddingHorizontal: 20, backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.colors.border, marginBottom: theme.spacing.md },
+  noDataIcon: { fontSize: 36, marginBottom: 8 },
+  noDataTitle: { fontSize: 15, fontWeight: '700', color: theme.colors.text, marginBottom: 4 },
+  noDataDesc: { fontSize: 13, color: theme.colors.textLight, textAlign: 'center', lineHeight: 20 },
+  clearFiltersBtn: { marginTop: 14, paddingHorizontal: 20, paddingVertical: 8, borderRadius: theme.borderRadius.sm },
+  clearFiltersBtnText: { color: theme.colors.white, fontSize: 13, fontWeight: '600' },
   typeHeaderRow: { marginBottom: 4, marginTop: 2 },
   typeHeaderText: { fontSize: 13, fontWeight: '700', color: MODULE_COLOR, textTransform: 'uppercase', letterSpacing: 0.5 },
   speciesSection: { marginBottom: theme.spacing.sm },
