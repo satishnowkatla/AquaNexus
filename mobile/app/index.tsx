@@ -11,9 +11,11 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        await supabase.auth.signInAnonymously();
+      // Always try anonymous sign-in to ensure valid session
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        const { error } = await supabase.auth.signInAnonymously();
+        if (error) console.warn('Anonymous sign-in failed:', error.message);
       }
       await new Promise(r => setTimeout(r, 2000));
 
