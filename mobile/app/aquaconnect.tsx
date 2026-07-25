@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../utils/supabase';
+import { API_URL } from '../utils/constants';
 import { theme } from '../utils/theme';
 import { MODULE_COLOR_MAP } from '../utils/moduleConfig';
 
@@ -24,7 +25,8 @@ type Post = {
 };
 type MarketPrice = {
   id: string; species: string; variety: string;
-  price_per_kg: number; market_name: string;
+  price_per_kg: number; min_price?: number; max_price?: number;
+  market_name: string;
   district: string; price_date: string; trend: string;
 };
 type Member = {
@@ -52,16 +54,36 @@ export default function AquaConnectScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [postsRes, pricesRes, membersRes, alertsRes] = await Promise.all([
+      // Fetch community data from Supabase + market prices from backend API in parallel
+      const [postsRes, membersRes, alertsRes, pricesRes] = await Promise.all([
         supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
-        supabase.from('market_prices').select('*').order('price_date', { ascending: false }).limit(20),
         supabase.from('users').select('id, full_name, phone, role, created_at').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
+        fetch(`${API_URL}/api/market/prices`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
       ]);
       if (postsRes.data) setPosts(postsRes.data);
-      if (pricesRes.data) setPrices(pricesRes.data);
       if (membersRes.data) setMembers(membersRes.data);
       if (alertsRes.data) setAlerts(alertsRes.data);
+
+      // Handle market prices from AGMARKNET API
+      if (pricesRes.success && pricesRes.data?.length > 0) {
+        setPrices(pricesRes.data.map((p: any, i: number) => ({
+          id: String(i),
+          species: p.species,
+          variety: p.variety,
+          price_per_kg: p.modal_price || p.max_price || 0,
+          min_price: p.min_price || 0,
+          max_price: p.max_price || 0,
+          market_name: p.market_name,
+          district: p.district,
+          price_date: p.date,
+          trend: p.max_price > p.min_price * 1.1 ? 'up' : p.max_price < p.min_price * 1.05 ? 'down' : 'stable',
+        })));
+      } else {
+        // Fallback: use Supabase seed data
+        const { data: seedPrices } = await supabase.from('market_prices').select('*').order('price_date', { ascending: false }).limit(20);
+        if (seedPrices) setPrices(seedPrices);
+      }
     } catch (err) {
       console.warn('AquaConnect error:', err);
     } finally {
@@ -176,17 +198,19 @@ export default function AquaConnectScreen() {
         {tab === 'market' && (
           <>
             <Text style={s.sectionTitle}>Fish & Shrimp Prices</Text>
-            <Text style={s.sectionSub}>Updated daily from Andhra Pradesh markets</Text>
-            {prices.length === 0 && <Text style={s.emptyTab}>No prices available</Text>}
+            <Text style={s.sectionSub}>Daily prices from AGMARKNET (Govt. of India) — Andhra Pradesh markets</Text>
+            {prices.length === 0 && <Text style={s.emptyTab}>No prices available today</Text>}
             {prices.map(p => (
               <View key={p.id} style={s.priceCard}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.priceSpecies}>{p.species}</Text>
                   <Text style={s.priceVariety}>{p.variety}</Text>
                   <Text style={s.priceMarket}>{p.market_name} • {p.district}</Text>
+                  {p.min_price ? <Text style={s.priceRange}>Range: ₹{p.min_price} – ₹{p.max_price}/quintal</Text> : null}
                 </View>
                 <View style={s.priceRight}>
-                  <Text style={s.priceValue}>₹{p.price_per_kg.toFixed(0)}/kg</Text>
+                  <Text style={s.priceValue}>₹{p.price_per_kg.toFixed(0)}</Text>
+                  <Text style={s.priceUnit}>per quintal</Text>
                   <View style={[s.trendBadge, { backgroundColor: TREND_COLORS[p.trend] + '20' }]}>
                     <Text style={[s.trendText, { color: TREND_COLORS[p.trend] }]}>{TREND_ICONS[p.trend]} {p.trend}</Text>
                   </View>
@@ -305,8 +329,10 @@ const s = StyleSheet.create({
   priceSpecies: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
   priceVariety: { fontSize: 12, color: theme.colors.textLight, marginTop: 1 },
   priceMarket: { fontSize: 11, color: theme.colors.textLight, marginTop: 4 },
+  priceRange: { fontSize: 10, color: theme.colors.textLight, marginTop: 2, fontStyle: 'italic' },
   priceRight: { alignItems: 'flex-end' },
   priceValue: { fontSize: 18, fontWeight: '800', color: theme.colors.text },
+  priceUnit: { fontSize: 10, color: theme.colors.textLight },
   trendBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.borderRadius.sm, marginTop: 4 },
   trendText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
 
