@@ -32,6 +32,8 @@ export default function AquaConnectScreen() {
   const [isMember, setIsMember] = useState(false);
 
   const joinCooperative = async (coopId: string, userId: string) => {
+    // Upsert user into users table first (needed for foreign key)
+    await supabase.from('users').upsert({ id: userId, phone: `dev-${userId.slice(0, 8)}`, full_name: 'Dev User' }, { onConflict: 'id' });
     await supabase.from('cooperative_members').insert({ cooperative_id: coopId, user_id: userId });
   };
 
