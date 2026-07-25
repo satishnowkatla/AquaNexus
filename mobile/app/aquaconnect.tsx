@@ -51,33 +51,36 @@ export default function AquaConnectScreen() {
   const [newPostText, setNewPostText] = useState('');
   const [newPostType, setNewPostType] = useState<string>('general');
   const [posting, setPosting] = useState(false);
+  const [weather, setWeather] = useState<any>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch community data from Supabase + market prices from backend API in parallel
-      const [postsRes, membersRes, alertsRes, pricesRes] = await Promise.all([
+      // Fetch community data from Supabase + market prices + weather from backend API in parallel
+      const [postsRes, membersRes, alertsRes, pricesRes, weatherRes] = await Promise.all([
         supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
         supabase.from('users').select('id, full_name, phone, role, created_at').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
         fetch(`${API_URL}/api/market/prices`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch(`${API_URL}/api/market/weather`).then(r => r.json()).catch(() => ({ success: false, data: null })),
       ]);
       if (postsRes.data) setPosts(postsRes.data);
       if (membersRes.data) setMembers(membersRes.data);
       if (alertsRes.data) setAlerts(alertsRes.data);
+      if (weatherRes.success && weatherRes.data) setWeather(weatherRes.data);
 
-      // Handle market prices from AGMARKNET API
+      // Handle market prices from scraped data
       if (pricesRes.success && pricesRes.data?.length > 0) {
         setPrices(pricesRes.data.map((p: any, i: number) => ({
           id: String(i),
           species: p.species,
-          variety: p.variety,
-          price_per_kg: p.modal_price || p.max_price || 0,
+          variety: p.variety || 'General',
+          price_per_kg: p.price_per_kg || 0,
           min_price: p.min_price || 0,
           max_price: p.max_price || 0,
           market_name: p.market_name,
           district: p.district,
-          price_date: p.date,
-          trend: p.max_price > p.min_price * 1.1 ? 'up' : p.max_price < p.min_price * 1.05 ? 'down' : 'stable',
+          price_date: p.price_date,
+          trend: p.trend || 'stable',
         })));
       } else {
         // Fallback: use Supabase seed data
@@ -197,8 +200,31 @@ export default function AquaConnectScreen() {
         {/* MARKET TAB */}
         {tab === 'market' && (
           <>
-            <Text style={s.sectionTitle}>Fish & Shrimp Prices</Text>
-            <Text style={s.sectionSub}>Daily prices from AGMARKNET (Govt. of India) — Andhra Pradesh markets</Text>
+            {weather && (
+              <View style={s.weatherCard}>
+                <Text style={s.weatherTitle}>Vijayawada, Andhra Pradesh</Text>
+                <View style={s.weatherRow}>
+                  <Text style={s.weatherTemp}>{weather.current?.temperature_2m ?? '--'}°C</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.weatherDetail}>Humidity: {weather.current?.relative_humidity_2m ?? '--'}%</Text>
+                    <Text style={s.weatherDetail}>Wind: {weather.current?.wind_speed_10m ?? '--'} km/h</Text>
+                  </View>
+                </View>
+                {weather.daily && (
+                  <View style={s.forecastRow}>
+                    {weather.daily.time?.slice(0, 5).map((date: string, i: number) => (
+                      <View key={i} style={s.forecastDay}>
+                        <Text style={s.forecastDate}>{new Date(date).toLocaleDateString('en-IN', { weekday: 'short' })}</Text>
+                        <Text style={s.forecastTemp}>{weather.daily.temperature_2m_max[i]}°</Text>
+                        <Text style={s.forecastMin}>{weather.daily.temperature_2m_min[i]}°</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+            <Text style={s.sectionTitle}>Market Prices</Text>
+            <Text style={s.sectionSub}>Live fish & shrimp prices from AP mandis</Text>
             {prices.length === 0 && <Text style={s.emptyTab}>No prices available today</Text>}
             {prices.map(p => (
               <View key={p.id} style={s.priceCard}>
@@ -365,4 +391,16 @@ const s = StyleSheet.create({
   postInput: { borderWidth: 1, borderColor: theme.colors.border, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 4, minHeight: 100, textAlignVertical: 'top', fontSize: 14, color: theme.colors.text, marginBottom: theme.spacing.md },
   postSubmit: { borderRadius: theme.borderRadius.md, paddingVertical: theme.spacing.sm + 4, alignItems: 'center' },
   postSubmitText: { color: theme.colors.white, fontWeight: '700', fontSize: theme.fontSize.md },
+
+  // Weather
+  weatherCard: { backgroundColor: theme.colors.infoBlue + '10', borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: theme.colors.infoBlue + '30' },
+  weatherTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.text, marginBottom: 4 },
+  weatherRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  weatherTemp: { fontSize: 32, fontWeight: '800', color: theme.colors.infoBlue, marginRight: 12 },
+  weatherDetail: { fontSize: 12, color: theme.colors.textLight },
+  forecastRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 8 },
+  forecastDay: { alignItems: 'center' },
+  forecastDate: { fontSize: 11, fontWeight: '600', color: theme.colors.text },
+  forecastTemp: { fontSize: 13, fontWeight: '700', color: theme.colors.text, marginTop: 2 },
+  forecastMin: { fontSize: 11, color: theme.colors.textLight },
 });
