@@ -30,7 +30,7 @@ VALUES
 
 -- Add all members to the cooperative
 INSERT INTO cooperative_members (cooperative_id, user_id)
-SELECT 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', id FROM users WHERE id LIKE '11111111-1111-1111-1111-1111111111%';
+SELECT 'a1b2c3d4-e5f6-7890-abcd-ef1234567890', id FROM users WHERE id::text LIKE '11111111-1111-1111-1111-1111111111%';
 
 -- Grant permissions
 GRANT ALL ON users TO anon;
