@@ -13,59 +13,68 @@ export interface MarketPrice {
   district: string;
   price_date: string;
   trend: string;
+  data_source: string;
+  unit: string;
 }
 
 let cache: { data: MarketPrice[]; fetchedAt: number } | null = null;
 const CACHE_TTL = 3 * 60 * 60 * 1000;
 
-function extractTableRow(html: string): MarketPrice[] {
-  const prices: MarketPrice[] = [];
-  // Match table rows with price data
-  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-  let match;
-  while ((match = rowRegex.exec(html)) !== null) {
-    const row = match[1];
-    const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
-    const cells: string[] = [];
-    let cellMatch;
-    while ((cellMatch = cellRegex.exec(row)) !== null) {
-      cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
-    }
-    if (cells.length >= 6) {
-      const species = cells[0];
-      const variety = cells[1] || 'General';
-      const market = cells[2] || '';
-      const district = cells[3] || 'Andhra Pradesh';
-      const minP = parseFloat(cells[4].replace(/[₹,\s]/g, '')) || 0;
-      const maxP = parseFloat(cells[5].replace(/[₹,\s]/g, '')) || 0;
-      const date = cells.length > 6 ? cells[6] : new Date().toISOString().split('T')[0];
+const AP_FISH_COMMODITIES = [
+  { slug: 'fish', name: 'Fish' },
+  { slug: 'shrimp', name: 'Shrimp' },
+  { slug: 'prawn', name: 'Prawn' },
+  { slug: 'dry-fish', name: 'Dry Fish' },
+];
 
-      if (species && !species.includes('Commodity') && minP > 0) {
-        prices.push({
-          species,
-          variety,
-          price_per_kg: Math.round((minP + maxP) / 200),
-          min_price: minP / 100,
-          max_price: maxP / 100,
-          market_name: market,
-          district,
-          price_date: date,
-          trend: maxP > minP * 1.05 ? 'up' : maxP < minP * 1.02 ? 'down' : 'stable',
-        });
-      }
-    }
-  }
-  return prices;
-}
-
-async function scrapeUrl(url: string): Promise<MarketPrice[]> {
+async function scrapeNapanta(commoditySlug: string): Promise<MarketPrice[]> {
   try {
-    const res = await fetch(url, { headers: SCRAPE_HEADERS });
+    const url = `https://www.napanta.com/agri-commodity-prices/andhra-pradesh/${commoditySlug}/`;
+    const res = await fetch(url, { headers: SCRAPE_HEADERS, signal: AbortSignal.timeout(10000) });
     if (!res.ok) return [];
     const html = await res.text();
-    return extractTableRow(html);
+
+    const prices: MarketPrice[] = [];
+    const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+    let match;
+    while ((match = rowRegex.exec(html)) !== null) {
+      const row = match[1];
+      const cellRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+      const cells: string[] = [];
+      let cellMatch;
+      while ((cellMatch = cellRegex.exec(row)) !== null) {
+        cells.push(cellMatch[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim());
+      }
+      // Napanta table: District | Market | Commodity | Variety | Max | Avg | Min | Date | ...
+      if (cells.length >= 7) {
+        const district = cells[0];
+        const market = cells[1];
+        const species = cells[2];
+        const variety = cells[3];
+        const maxPrice = parseFloat(cells[4].replace(/[₹,\s]/g, '')) || 0;
+        const avgPrice = parseFloat(cells[5].replace(/[₹,\s]/g, '')) || 0;
+        const minPrice = parseFloat(cells[6].replace(/[₹,\s]/g, '')) || 0;
+
+        if (district && market && minPrice > 0) {
+          prices.push({
+            species: species || commoditySlug,
+            variety: variety || 'General',
+            price_per_kg: avgPrice / 100,
+            min_price: minPrice / 100,
+            max_price: maxPrice / 100,
+            market_name: market,
+            district,
+            price_date: cells.length > 7 ? cells[7] : new Date().toISOString().split('T')[0],
+            trend: maxPrice > minPrice * 1.05 ? 'up' : maxPrice < minPrice * 1.02 ? 'down' : 'stable',
+            data_source: 'agmarknet',
+            unit: 'per_kg',
+          });
+        }
+      }
+    }
+    return prices;
   } catch (err) {
-    console.warn(`Scrape failed for ${url}:`, err);
+    console.warn(`Napanta scrape failed for ${commoditySlug}:`, err);
     return [];
   }
 }
@@ -75,13 +84,9 @@ export async function getFishPricesInAP(): Promise<MarketPrice[]> {
     return cache.data;
   }
 
-  const urls = [
-    'https://www.kisandeals.com/mandiprices/FISH/Andhra-Pradesh/ALL',
-    'https://www.kisandeals.com/mandiprices/SHRIMP/Andhra-Pradesh/ALL',
-    'https://www.commoditymarketlive.com/mandi-price-state/andhra-pradesh/fish',
-  ];
-
-  const results = await Promise.all(urls.map(u => scrapeUrl(u)));
+  const results = await Promise.all(
+    AP_FISH_COMMODITIES.map(c => scrapeNapanta(c.slug))
+  );
   const all = results.flat();
 
   if (all.length > 0) {
@@ -107,5 +112,8 @@ export async function getWeatherAP(): Promise<any> {
 }
 
 export async function getFilters(): Promise<any> {
-  return { message: 'Market prices from open-source data' };
+  return {
+    commodities: AP_FISH_COMMODITIES.map(c => ({ slug: c.slug, name: c.name })),
+    districts: ['Krishna', 'Guntur', 'East Godavari', 'West Godavari', 'Nellore', 'Prakasam'],
+  };
 }

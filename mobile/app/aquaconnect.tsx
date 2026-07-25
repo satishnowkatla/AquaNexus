@@ -28,6 +28,7 @@ type MarketPrice = {
   price_per_kg: number; min_price?: number; max_price?: number;
   market_name: string;
   district: string; price_date: string; trend: string;
+  data_source?: string; unit?: string;
 };
 type Member = {
   id: string; full_name: string; phone: string;
@@ -52,22 +53,68 @@ export default function AquaConnectScreen() {
   const [newPostType, setNewPostType] = useState<string>('general');
   const [posting, setPosting] = useState(false);
   const [weather, setWeather] = useState<any>(null);
+  const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
+  const [lastUpdated, setLastUpdated] = useState<string>('');
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch community data from Supabase + weather directly + market from Supabase fallback
-      const [postsRes, membersRes, alertsRes, weatherRes, pricesRes] = await Promise.all([
+      // Fetch community data from Supabase + weather directly
+      const [postsRes, membersRes, alertsRes, weatherRes] = await Promise.all([
         supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
         supabase.from('users').select('id, full_name, phone, role, created_at').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
         fetch('https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7').then(r => r.json()).catch(() => null),
-        supabase.from('market_prices').select('*').order('price_date', { ascending: false }).limit(20),
       ]);
       if (postsRes.data) setPosts(postsRes.data);
       if (membersRes.data) setMembers(membersRes.data);
       if (alertsRes.data) setAlerts(alertsRes.data);
       if (weatherRes) setWeather(weatherRes);
-      if (pricesRes.data) setPrices(pricesRes.data);
+
+      // Try live AGMARKNET data from backend first
+      let gotLivePrices = false;
+      try {
+        const liveRes = await fetch(`${API_URL}/api/market/prices`, { signal: AbortSignal.timeout(8000) });
+        if (liveRes.ok) {
+          const liveData = await liveRes.json();
+          if (liveData.success && liveData.data?.length > 0) {
+            const mapped = liveData.data.map((p: any, i: number) => ({
+              id: `live-${i}`,
+              species: p.species,
+              variety: p.variety,
+              price_per_kg: p.price_per_kg,
+              min_price: p.min_price,
+              max_price: p.max_price,
+              market_name: p.market_name,
+              district: p.district,
+              price_date: p.price_date || new Date().toISOString().split('T')[0],
+              trend: p.trend,
+              data_source: p.data_source || 'agmarknet',
+              unit: p.unit || 'per_kg',
+            }));
+            setPrices(mapped);
+            gotLivePrices = true;
+            const latestDate = mapped[0]?.price_date;
+            if (latestDate) setLastUpdated(new Date(latestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }));
+          }
+        }
+      } catch {
+        // Backend unavailable, fall through to Supabase
+      }
+
+      // Fallback: Supabase benchmark prices
+      if (!gotLivePrices) {
+        const pricesRes = await supabase.from('market_prices').select('*').order('price_date', { ascending: false }).order('species').limit(50);
+        if (pricesRes.data) {
+          setPrices(pricesRes.data);
+          if (pricesRes.data.length > 0) {
+            const latest = pricesRes.data[0]?.price_date;
+            if (latest) {
+              const d = new Date(latest);
+              setLastUpdated(d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }));
+            }
+          }
+        }
+      }
     } catch (err) {
       console.warn('AquaConnect error:', err);
     } finally {
@@ -183,12 +230,15 @@ export default function AquaConnectScreen() {
           <>
             {weather && (
               <View style={s.weatherCard}>
-                <Text style={s.weatherTitle}>Vijayawada, Andhra Pradesh</Text>
+                <View style={s.weatherHeader}>
+                  <Text style={s.weatherTitle}>Vijayawada, Andhra Pradesh</Text>
+                  <Text style={s.weatherBadge}>Live</Text>
+                </View>
                 <View style={s.weatherRow}>
                   <Text style={s.weatherTemp}>{weather.current?.temperature_2m ?? '--'}°C</Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.weatherDetail}>Humidity: {weather.current?.relative_humidity_2m ?? '--'}%</Text>
-                    <Text style={s.weatherDetail}>Wind: {weather.current?.wind_speed_10m ?? '--'} km/h</Text>
+                    <Text style={s.weatherDetail}>💧 {weather.current?.relative_humidity_2m ?? '--'}%</Text>
+                    <Text style={s.weatherDetail}>💨 {weather.current?.wind_speed_10m ?? '--'} km/h</Text>
                   </View>
                 </View>
                 {weather.daily && (
@@ -204,26 +254,76 @@ export default function AquaConnectScreen() {
                 )}
               </View>
             )}
-            <Text style={s.sectionTitle}>Market Prices</Text>
-            <Text style={s.sectionSub}>Live fish & shrimp prices from AP mandis</Text>
-            {prices.length === 0 && <Text style={s.emptyTab}>No prices available today</Text>}
-            {prices.map(p => (
-              <View key={p.id} style={s.priceCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.priceSpecies}>{p.species}</Text>
-                  <Text style={s.priceVariety}>{p.variety}</Text>
-                  <Text style={s.priceMarket}>{p.market_name} • {p.district}</Text>
-                  {p.min_price ? <Text style={s.priceRange}>Range: ₹{p.min_price} – ₹{p.max_price}/quintal</Text> : null}
-                </View>
-                <View style={s.priceRight}>
-                  <Text style={s.priceValue}>₹{p.price_per_kg.toFixed(0)}</Text>
-                  <Text style={s.priceUnit}>per quintal</Text>
-                  <View style={[s.trendBadge, { backgroundColor: TREND_COLORS[p.trend] + '20' }]}>
-                    <Text style={[s.trendText, { color: TREND_COLORS[p.trend] }]}>{TREND_ICONS[p.trend]} {p.trend}</Text>
-                  </View>
-                </View>
+
+            <View style={s.marketHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sectionTitle}>Fish & Shrimp Prices</Text>
+                <Text style={s.sectionSub}>{lastUpdated ? `Updated ${lastUpdated}` : 'Loading...'}</Text>
               </View>
-            ))}
+              <TouchableOpacity style={[s.refreshBadge, { backgroundColor: MODULE_COLOR }]} onPress={onRefresh}>
+                <Text style={s.refreshText}>↻ Refresh</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* District Filter */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filterContent}>
+              {['all', ...Array.from(new Set(prices.map(p => p.district).filter(Boolean)))].map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[s.filterChip, selectedDistrict === d && { backgroundColor: MODULE_COLOR }]}
+                  onPress={() => setSelectedDistrict(d)}
+                >
+                  <Text style={[s.filterText, selectedDistrict === d && { color: theme.colors.white, fontWeight: '600' }]}>
+                    {d === 'all' ? 'All Districts' : d}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {prices.length === 0 && <Text style={s.emptyTab}>No prices available today</Text>}
+
+            {/* Group prices by species */}
+            {(() => {
+              const filtered = selectedDistrict === 'all' ? prices : prices.filter(p => p.district === selectedDistrict);
+              const grouped = filtered.reduce((acc, p) => {
+                if (!acc[p.species]) acc[p.species] = [];
+                acc[p.species].push(p);
+                return acc;
+              }, {} as Record<string, MarketPrice[]>);
+
+              return Object.entries(grouped).map(([species, items]) => (
+                <View key={species} style={s.speciesSection}>
+                  <View style={s.speciesHeader}>
+                    <Text style={s.speciesName}>{species}</Text>
+                    <View style={[s.sourceBadge, { backgroundColor: items[0]?.data_source === 'agmarknet' ? theme.colors.green + '20' : theme.colors.blue + '15' }]}>
+                      <Text style={[s.sourceText, { color: items[0]?.data_source === 'agmarknet' ? theme.colors.green : theme.colors.blue }]}>
+                        {items[0]?.data_source === 'agmarknet' ? '🏛 Govt Mandi' : '📊 Benchmark'}
+                      </Text>
+                    </View>
+                  </View>
+                  {items.map(p => (
+                    <View key={p.id} style={s.priceCard}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.priceVariety}>{p.variety}</Text>
+                        <Text style={s.priceMarket}>📍 {p.market_name}</Text>
+                        {p.min_price != null && p.max_price != null && (
+                          <Text style={s.priceRange}>Range: ₹{p.min_price.toFixed(0)} – ₹{p.max_price.toFixed(0)}</Text>
+                        )}
+                      </View>
+                      <View style={s.priceRight}>
+                        <Text style={[s.priceValue, { color: theme.colors.text }]}>₹{p.price_per_kg.toFixed(0)}</Text>
+                        <Text style={s.priceUnit}>per kg</Text>
+                        <View style={[s.trendBadge, { backgroundColor: TREND_COLORS[p.trend] + '20' }]}>
+                          <Text style={[s.trendText, { color: TREND_COLORS[p.trend] }]}>
+                            {TREND_ICONS[p.trend]} {p.trend}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ));
+            })()}
           </>
         )}
 
@@ -330,12 +430,23 @@ const s = StyleSheet.create({
   postActionText: { fontSize: 12, color: theme.colors.textLight },
 
   // Market
+  marketHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
+  refreshBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
+  refreshText: { color: theme.colors.white, fontSize: 12, fontWeight: '600' },
+  filterScroll: { marginBottom: theme.spacing.md, maxHeight: 40 },
+  filterContent: { gap: 8 },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.colors.grey[100], borderWidth: 1, borderColor: theme.colors.border },
+  filterText: { fontSize: 12, color: theme.colors.textLight, fontWeight: '500' },
+  speciesSection: { marginBottom: theme.spacing.md },
+  speciesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.sm },
+  speciesName: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
+  sourceBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  sourceText: { fontSize: 10, fontWeight: '600' },
   sectionTitle: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text, marginBottom: 2 },
-  sectionSub: { fontSize: 12, color: theme.colors.textLight, marginBottom: theme.spacing.md },
-  priceCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
-  priceSpecies: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
-  priceVariety: { fontSize: 12, color: theme.colors.textLight, marginTop: 1 },
-  priceMarket: { fontSize: 11, color: theme.colors.textLight, marginTop: 4 },
+  sectionSub: { fontSize: 12, color: theme.colors.textLight, marginBottom: theme.spacing.sm },
+  priceCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.xs, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
+  priceVariety: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
+  priceMarket: { fontSize: 11, color: theme.colors.textLight, marginTop: 3 },
   priceRange: { fontSize: 10, color: theme.colors.textLight, marginTop: 2, fontStyle: 'italic' },
   priceRight: { alignItems: 'flex-end' },
   priceValue: { fontSize: 18, fontWeight: '800', color: theme.colors.text },
@@ -375,7 +486,9 @@ const s = StyleSheet.create({
 
   // Weather
   weatherCard: { backgroundColor: theme.colors.infoBlue + '10', borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: theme.colors.infoBlue + '30' },
-  weatherTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.text, marginBottom: 4 },
+  weatherHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  weatherTitle: { fontSize: 13, fontWeight: '700', color: theme.colors.text },
+  weatherBadge: { fontSize: 10, fontWeight: '700', color: theme.colors.green, backgroundColor: theme.colors.green + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden' },
   weatherRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   weatherTemp: { fontSize: 32, fontWeight: '800', color: theme.colors.infoBlue, marginRight: 12 },
   weatherDetail: { fontSize: 12, color: theme.colors.textLight },
