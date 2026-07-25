@@ -55,6 +55,8 @@ export default function AquaConnectScreen() {
   const [weather, setWeather] = useState<any>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
   const [selectedSpeciesType, setSelectedSpeciesType] = useState<string>('all');
+  const [selectedMarket, setSelectedMarket] = useState<string>('all');
+  const [marketList, setMarketList] = useState<Array<{ id: number; name: string; district: string }>>([]);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [dataSource, setDataSource] = useState<string>('');
 
@@ -72,10 +74,14 @@ export default function AquaConnectScreen() {
       if (alertsRes.data) setAlerts(alertsRes.data);
       if (weatherRes) setWeather(weatherRes);
 
-      // Try live AGMARKNET data from backend first
+      // Try live NFDB data from backend (longer timeout — backend fetches 8 markets in parallel)
       let gotLivePrices = false;
       try {
-        const liveRes = await fetch(`${API_URL}/api/market/prices`, { signal: AbortSignal.timeout(8000) });
+        const [liveRes, marketsRes] = await Promise.all([
+          fetch(`${API_URL}/api/market/prices`, { signal: AbortSignal.timeout(25000) }),
+          fetch(`${API_URL}/api/market/markets`, { signal: AbortSignal.timeout(10000) }).then(r => r.json()).catch(() => null),
+        ]);
+        if (marketsRes?.success && marketsRes.data) setMarketList(marketsRes.data);
         if (liveRes.ok) {
           const liveData = await liveRes.json();
           if (liveData.success && liveData.data?.length > 0) {
@@ -96,7 +102,7 @@ export default function AquaConnectScreen() {
             }));
             setPrices(mapped);
             gotLivePrices = true;
-            setDataSource(liveData.source === 'nfdb' ? 'NFDB FMPIS (Govt of India)' : liveData.source || 'Live Data');
+            setDataSource('NFDB FMPIS (Govt of India)');
             const latestDate = mapped[0]?.price_date;
             if (latestDate) setLastUpdated(new Date(latestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }));
           }
@@ -294,12 +300,31 @@ export default function AquaConnectScreen() {
               ))}
             </ScrollView>
 
+            {/* District Filter */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filterContent}>
+              {(() => {
+                const districts = [...new Set(prices.map(p => p.district).filter(Boolean))].sort();
+                return [{ key: 'all', label: '🏛 All AP' }, ...districts.map(d => ({ key: d, label: `📍 ${d}` }))];
+              })().map(f => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[s.filterChip, selectedDistrict === f.key && { backgroundColor: theme.colors.infoBlue }]}
+                  onPress={() => setSelectedDistrict(f.key)}
+                >
+                  <Text style={[s.filterText, selectedDistrict === f.key && { color: theme.colors.white, fontWeight: '600' }]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
             {prices.length === 0 && <Text style={s.emptyTab}>No prices available today</Text>}
 
             {/* Group prices by species */}
             {(() => {
               const filtered = prices.filter(p => {
                 if (selectedSpeciesType !== 'all' && p.species_type !== selectedSpeciesType) return false;
+                if (selectedDistrict !== 'all' && p.district !== selectedDistrict) return false;
                 return true;
               });
               const grouped = filtered.reduce((acc, p) => {
@@ -317,36 +342,70 @@ export default function AquaConnectScreen() {
                 other: '🐟 Fish',
               };
 
-              return Object.entries(grouped).map(([species, items]) => (
-                <View key={species} style={s.speciesSection}>
-                  <View style={s.speciesHeader}>
-                    <Text style={s.speciesName}>{species}</Text>
-                    <View style={s.sourceBadge}>
-                      <Text style={s.sourceText}>🏛 Govt of India</Text>
-                    </View>
+              if (Object.keys(grouped).length === 0 && prices.length > 0) {
+                return (
+                  <View style={{ alignItems: 'center', paddingVertical: 30 }}>
+                    <Text style={{ fontSize: 14, color: theme.colors.textLight }}>No results for current filters</Text>
+                    <TouchableOpacity onPress={() => { setSelectedSpeciesType('all'); setSelectedDistrict('all'); }} style={{ marginTop: 8 }}>
+                      <Text style={{ fontSize: 13, color: MODULE_COLOR, fontWeight: '600' }}>Clear filters</Text>
+                    </TouchableOpacity>
                   </View>
-                  {items.map(p => (
-                    <View key={p.id} style={s.priceCard}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.priceVariety}>{p.variety}</Text>
-                        <Text style={s.priceMarket}>📍 {p.market_name}</Text>
-                        {p.min_price != null && p.max_price != null && (
-                          <Text style={s.priceRange}>Range: ₹{p.min_price} – ₹{p.max_price}/kg</Text>
-                        )}
+                );
+              }
+
+              const sortedEntries = Object.entries(grouped).sort((a, b) => {
+                const typeA = a[1][0]?.species_type || 'other';
+                const typeB = b[1][0]?.species_type || 'other';
+                const order: Record<string, number> = { shrimp: 0, prawn: 1, freshwater_fish: 2, marine_fish: 3, crab: 4, other: 5 };
+                return (order[typeA] ?? 5) - (order[typeB] ?? 5);
+              });
+
+              let lastType = '';
+
+              return sortedEntries.map(([species, items]) => {
+                const currentType = items[0]?.species_type || 'other';
+                const showTypeHeader = currentType !== lastType;
+                lastType = currentType;
+
+                return (
+                  <View key={species}>
+                    {showTypeHeader && (
+                      <View style={[s.typeHeaderRow, { marginTop: lastType === 'shrimp' ? 0 : theme.spacing.sm }]}>
+                        <Text style={s.typeHeaderText}>{typeLabels[currentType]}</Text>
                       </View>
-                      <View style={s.priceRight}>
-                        <Text style={[s.priceValue, { color: theme.colors.text }]}>₹{p.price_per_kg}</Text>
-                        <Text style={s.priceUnit}>per kg</Text>
-                        <View style={[s.trendBadge, { backgroundColor: TREND_COLORS[p.trend] + '20' }]}>
-                          <Text style={[s.trendText, { color: TREND_COLORS[p.trend] }]}>
-                            {TREND_ICONS[p.trend]} {p.trend}
-                          </Text>
+                    )}
+                    <View style={s.speciesSection}>
+                      <View style={s.speciesHeader}>
+                        <Text style={s.speciesName}>{species}</Text>
+                        <View style={s.sourceBadge}>
+                          <Text style={s.sourceText}>🏛 Govt of India</Text>
                         </View>
                       </View>
+                      {items.map(p => (
+                        <View key={p.id} style={s.priceCard}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.priceVariety}>{p.variety}</Text>
+                            <Text style={s.priceMarket}>📍 {p.market_name}</Text>
+                            <Text style={s.priceDistrict}>{p.district}</Text>
+                            {p.min_price != null && p.max_price != null && p.min_price !== p.max_price && (
+                              <Text style={s.priceRange}>Range: ₹{p.min_price} – ₹{p.max_price}/kg</Text>
+                            )}
+                          </View>
+                          <View style={s.priceRight}>
+                            <Text style={[s.priceValue, { color: theme.colors.text }]}>₹{p.price_per_kg}</Text>
+                            <Text style={s.priceUnit}>per kg</Text>
+                            <View style={[s.trendBadge, { backgroundColor: TREND_COLORS[p.trend] + '20' }]}>
+                              <Text style={[s.trendText, { color: TREND_COLORS[p.trend] }]}>
+                                {TREND_ICONS[p.trend]} {p.trend}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
                     </View>
-                  ))}
-                </View>
-              ));
+                  </View>
+                );
+              });
             })()}
           </>
         )}
@@ -457,11 +516,13 @@ const s = StyleSheet.create({
   marketHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
   refreshBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
   refreshText: { color: theme.colors.white, fontSize: 12, fontWeight: '600' },
-  filterScroll: { marginBottom: theme.spacing.md, maxHeight: 40 },
+  filterScroll: { marginBottom: 6, maxHeight: 36 },
   filterContent: { gap: 8 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: theme.colors.grey[100], borderWidth: 1, borderColor: theme.colors.border },
   filterText: { fontSize: 12, color: theme.colors.textLight, fontWeight: '500' },
-  speciesSection: { marginBottom: theme.spacing.md },
+  typeHeaderRow: { marginBottom: 4, marginTop: 2 },
+  typeHeaderText: { fontSize: 13, fontWeight: '700', color: MODULE_COLOR, textTransform: 'uppercase', letterSpacing: 0.5 },
+  speciesSection: { marginBottom: theme.spacing.sm },
   speciesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.sm },
   speciesName: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
   sourceBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: theme.colors.green + '15' },
@@ -471,6 +532,7 @@ const s = StyleSheet.create({
   priceCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.xs, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
   priceVariety: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
   priceMarket: { fontSize: 11, color: theme.colors.textLight, marginTop: 3 },
+  priceDistrict: { fontSize: 10, color: MODULE_COLOR, marginTop: 1, fontWeight: '500' },
   priceRange: { fontSize: 10, color: theme.colors.textLight, marginTop: 2, fontStyle: 'italic' },
   priceRight: { alignItems: 'flex-end' },
   priceValue: { fontSize: 18, fontWeight: '800', color: theme.colors.text },

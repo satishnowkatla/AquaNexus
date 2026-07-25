@@ -1,8 +1,5 @@
-// Market price service using NFDB FMPIS (Government of India)
-// https://fmpisnfdb.in - National Fisheries Development Board
-
 const NFDB_BASE = 'https://fmpisnfdb.in';
-const NFDB_HEADERS = {
+const NFDB_HEADERS: Record<string, string> = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   'Accept': '*/*',
   'Accept-Language': 'en-US,en;q=0.9',
@@ -50,7 +47,7 @@ const FRESHWATER_FISH = new Set([
   'Climbing Perch', 'Giant Snakehead', 'Green Snake head', 'Assamese snake head',
   'Indian Glassy Fish', 'Stripped Gourami', 'Tiger loach', 'Zebra Danio',
   'Zig zag eel', 'Short fin eel', 'Rainbow Trout', 'Chocolate Mahseer',
-  'Golden Mahseer', 'Indian trout',
+  'Golden Mahseer', 'Indian trout', 'Black Rohu',
 ]);
 
 const MARINE_FISH = new Set([
@@ -67,14 +64,46 @@ const MARINE_FISH = new Set([
   'Pickhandle barracuda', 'Sword fish', 'Milk fish', 'Milk shark',
   'Bearded croaker', 'Lesser tigertooth croaker', 'Spotted croaker',
   'John\'s snapper', 'Mangrove snapper', 'Malabar grouper', 'Malabar blood snapper',
-  'Spotted croaker', 'Granulated guitar fish', 'Giant guitar fish',
+  'Granulated guitar fish', 'Giant guitar fish',
   'Spade nose shark', 'Big-eyes', 'Japanese threadfin bream',
   'Splendid pony fish', 'Silver Belly', 'Silver sillago',
   'Black barred half beak', 'Needle cuttle fish', 'Pharaoh cuttle fish',
   'Spineless cuttle fish', 'Indian squid', 'Rock lobster',
   'Flat head lobster', 'Brown mussel', 'Green mussel', 'Oyster',
-  'Spotted eagle ray', 'Smooth brass snake head',
+  'Spotted eagle ray', 'Smooth brass snake head', 'False trevally',
+  'Indian mackerel',
 ]);
+
+const MARKET_DISTRICT: Record<string, string> = {
+  'Amalapuram Fish Market': 'Dr.B.R.A.Konaseema',
+  'Anantapuram Fish Market': 'Anantapur',
+  'Bapatla Fish Market': 'Bapatla',
+  'Bheemili Municipal Fish Market': 'Visakhapatnam',
+  'Bobbili Fish Market': 'Vizianagaram',
+  'Chittoor Fish Market': 'Chittoor',
+  'Eluru Wholesale Fish Market  (New Market)': 'West Godavari',
+  'Fish Market Darsipeta': 'Srikakulam',
+  'Fish Market Ibrahimpatnam': 'Krishna',
+  'Fish Market Payakapuram': 'East Godavari',
+  'Hanumantharaya Fish Market': 'Anantapur',
+  'Jalapushpa Bhavan Wholesale Fish Market': 'Guntur',
+  'Jangareddygudem Fish Market': 'West Godavari',
+  'Kurnool Fish Market ( King Market)': 'Kurnool',
+  'Machilipatnam wholesale & Retail Fish Market': 'Krishna',
+  'Mahanti Fish Market': 'East Godavari',
+  'Nandi Kotkuru Fish Market': 'West Godavari',
+  'Palamaneru Fish Market': 'Chittoor',
+  'Parvathipuram Fish Market': 'Vizianagaram',
+  'Rajam Fish Market': 'Srikakulam',
+  'Salur Fish Market': 'Vizianagaram',
+  'SUDA ( Srikakulam Urban Dev. Authority ) Fish Market': 'Srikakulam',
+  'Tekkali Fish Market': 'Srikakulam',
+  'Tirupathi Fish Market': 'Tirupathi',
+  'Tuni Retail Fish Market': 'East Godavari',
+  'Venlok Fish Market': 'East Godavari',
+  'Visakhapatnam Municipal Wholesale Fish market': 'Visakhapatnam',
+  'Vizayanagaram Fish Market': 'Vizianagaram',
+};
 
 function getSpeciesType(name: string): string {
   if (SPECIES_TYPE_MAP[name]) return SPECIES_TYPE_MAP[name];
@@ -83,96 +112,88 @@ function getSpeciesType(name: string): string {
   return 'other';
 }
 
+function getDistrict(marketName: string): string {
+  if (MARKET_DISTRICT[marketName]) return MARKET_DISTRICT[marketName];
+  for (const [key, val] of Object.entries(MARKET_DISTRICT)) {
+    if (marketName.includes(key) || key.includes(marketName)) return val;
+  }
+  return 'Andhra Pradesh';
+}
+
 let cache: { data: MarketPrice[]; fetchedAt: number } | null = null;
 const CACHE_TTL = 3 * 60 * 60 * 1000;
 
-async function fetchNfdbPrices(stateId: number = 1): Promise<MarketPrice[]> {
+async function fetchNfdbForMarket(marketId: number, marketName: string, dateStr: string): Promise<MarketPrice[]> {
+  try {
+    const body = `draw=1&start=0&length=200&sid=1&market=${marketId}&species=&size=&date=${dateStr}`;
+    const res = await fetch(`${NFDB_BASE}/prices/filters`, {
+      method: 'POST',
+      headers: NFDB_HEADERS,
+      body,
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return [];
+    const json = await res.json() as any;
+    if (!json.data || !Array.isArray(json.data)) return [];
+
+    const district = getDistrict(marketName);
+    return json.data.map((row: any[], idx: number) => {
+      const [_, species, size, priceStr, date] = row;
+      const price = parseFloat(priceStr);
+      if (!species || isNaN(price) || price <= 0) return null;
+      return {
+        id: `nfdb-${marketId}-${idx}`,
+        species,
+        variety: String(size).charAt(0).toUpperCase() + String(size).slice(1),
+        price_per_kg: price,
+        min_price: price,
+        max_price: price,
+        market_name: marketName,
+        district,
+        price_date: date || dateStr.split('-').reverse().join('-'),
+        trend: 'stable',
+        data_source: 'nfdb_govt',
+        unit: 'per_kg',
+        species_type: getSpeciesType(species),
+      };
+    }).filter(Boolean) as MarketPrice[];
+  } catch {
+    return [];
+  }
+}
+
+const TOP_MARKETS: Array<{ id: number; name: string }> = [
+  { id: 3, name: 'Eluru Fish Market' },
+  { id: 195, name: 'Machilipatnam Fish Market' },
+  { id: 531, name: 'Visakhapatnam Fish Market' },
+  { id: 537, name: 'Amalapuram Fish Market' },
+  { id: 730, name: 'Kurnool Fish Market' },
+  { id: 539, name: 'Jalapushpa Bhavan Fish Market' },
+  { id: 726, name: 'Srikakulam Fish Market' },
+  { id: 742, name: 'Tirupathi Fish Market' },
+];
+
+async function fetchFromNfdb(): Promise<MarketPrice[]> {
   const today = new Date();
   const dateStr = `${today.getDate().toString().padStart(2, '0')}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getFullYear()}`;
 
-  const body = `draw=1&start=0&length=500&sid=${stateId}&market=&species=&size=&date=${dateStr}`;
-  const res = await fetch(`${NFDB_BASE}/prices/filters`, {
-    method: 'POST',
-    headers: NFDB_HEADERS as any,
-    body,
-    signal: AbortSignal.timeout(30000),
-  });
+  const results = await Promise.all(
+    TOP_MARKETS.map(m => fetchNfdbForMarket(m.id, m.name, dateStr))
+  );
+  const all = results.flat();
+  if (all.length === 0) return [];
 
-  if (!res.ok) throw new Error(`NFDB returned ${res.status}`);
-  const json = await res.json() as any;
-
-  if (!json.data || !Array.isArray(json.data)) return [];
-
-  // Aggregate by species: show min/max/avg across all markets
-  const speciesMap = new Map<string, {
-    prices: number[];
-    markets: Set<string>;
-    date: string;
-    variety: string;
-  }>();
-
-  for (const row of json.data) {
-    const [_, species, size, priceStr, date] = row;
-    const price = parseFloat(priceStr);
-    if (!species || isNaN(price) || price <= 0) continue;
-
-    const key = `${species}|${size}`;
-    const existing = speciesMap.get(key);
-    if (existing) {
-      existing.prices.push(price);
-      existing.date = date;
-    } else {
-      speciesMap.set(key, {
-        prices: [price],
-        markets: new Set(),
-        date,
-        variety: size,
-      });
-    }
-  }
-
-  const result: MarketPrice[] = [];
-  let idx = 0;
-
-  for (const [key, agg] of speciesMap) {
-    const [species, size] = key.split('|');
-    const prices = agg.prices;
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-    const speciesType = getSpeciesType(species);
-
-    result.push({
-      id: `nfdb-${idx++}`,
-      species,
-      variety: size.charAt(0).toUpperCase() + size.slice(1),
-      price_per_kg: avg,
-      min_price: min,
-      max_price: max,
-      market_name: `AP Fish Markets (${prices.length} sources)`,
-      district: 'Andhra Pradesh',
-      price_date: agg.date || dateStr.split('-').reverse().join('-'),
-      trend: max > min * 1.1 ? 'up' : max < min * 0.95 ? 'down' : 'stable',
-      data_source: 'nfdb_govt',
-      unit: 'per_kg',
-      species_type: speciesType,
-    });
-  }
-
-  // Sort: shrimp/prawn first, then freshwater, then marine
   const typeOrder: Record<string, number> = { shrimp: 0, prawn: 1, freshwater_fish: 2, crab: 3, marine_fish: 4, other: 5 };
-  result.sort((a, b) => (typeOrder[a.species_type] ?? 5) - (typeOrder[b.species_type] ?? 5) || a.species.localeCompare(b.species));
-
-  return result;
+  all.sort((a, b) => (typeOrder[a.species_type] ?? 5) - (typeOrder[b.species_type] ?? 5) || a.species.localeCompare(b.species));
+  return all;
 }
 
 export async function getFishPricesInAP(): Promise<MarketPrice[]> {
   if (cache && (Date.now() - cache.fetchedAt) < CACHE_TTL) {
     return cache.data;
   }
-
   try {
-    const prices = await fetchNfdbPrices(1);
+    const prices = await fetchFromNfdb();
     if (prices.length > 0) {
       cache = { data: prices, fetchedAt: Date.now() };
       return prices;
@@ -180,9 +201,16 @@ export async function getFishPricesInAP(): Promise<MarketPrice[]> {
   } catch (err) {
     console.warn('NFDB fetch failed:', err);
   }
-
   if (cache?.data) return cache.data;
   return [];
+}
+
+export async function getMarketsList(): Promise<Array<{ id: number; name: string; district: string }>> {
+  return TOP_MARKETS.map(m => ({
+    id: m.id,
+    name: m.name,
+    district: getDistrict(m.name),
+  }));
 }
 
 export async function getWeatherAP(): Promise<any> {
@@ -201,7 +229,8 @@ export async function getWeatherAP(): Promise<any> {
 export async function getFilters(): Promise<any> {
   return {
     source: 'NFDB FMPIS (Government of India)',
-    species_types: ['All', 'Shrimp', 'Prawn', 'Freshwater Fish', 'Marine Fish', 'Crab'],
+    species_types: ['shrimp', 'prawn', 'freshwater_fish', 'marine_fish', 'crab', 'other'],
+    markets: TOP_MARKETS.map(m => ({ id: m.id, name: m.name, district: getDistrict(m.name) })),
     state: 'Andhra Pradesh',
   };
 }

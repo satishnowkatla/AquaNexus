@@ -1,17 +1,26 @@
 import { Router, Response } from 'express';
-import { getFishPricesInAP, getWeatherAP, getFilters } from '../services/market.service';
+import { getFishPricesInAP, getWeatherAP, getFilters, getMarketsList } from '../services/market.service';
 
 const router = Router();
 
 // Get fish/shrimp market prices for Andhra Pradesh
+// Query params: ?market_id=<number> to filter by specific market
 router.get('/prices', async (req, res: Response) => {
   try {
     const prices = await getFishPricesInAP();
+    const marketId = req.query.market_id ? Number(req.query.market_id) : null;
+    let filtered = prices;
+    if (marketId) {
+      filtered = prices.filter(p => {
+        const match = p.market_name.toLowerCase();
+        return p.id.includes(`-${marketId}-`);
+      });
+    }
     res.json({
       success: true,
-      data: prices,
-      count: prices.length,
-      source: prices.length > 0 ? 'agmarknet-scrape' : 'unavailable',
+      data: filtered,
+      count: filtered.length,
+      source: filtered.length > 0 ? 'nfdb_fmpis' : 'unavailable',
       fetchedAt: new Date().toISOString(),
     });
   } catch (error: any) {
@@ -22,8 +31,18 @@ router.get('/prices', async (req, res: Response) => {
   }
 });
 
+// Get list of markets in Andhra Pradesh
+router.get('/markets', async (_req, res: Response) => {
+  try {
+    const markets = await getMarketsList();
+    res.json({ success: true, data: markets });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+});
+
 // Get weather for Andhra Pradesh
-router.get('/weather', async (req, res: Response) => {
+router.get('/weather', async (_req, res: Response) => {
   try {
     const weather = await getWeatherAP();
     if (!weather) {
@@ -39,8 +58,8 @@ router.get('/weather', async (req, res: Response) => {
   }
 });
 
-// Get filters (stub)
-router.get('/filters', async (req, res: Response) => {
+// Get filters
+router.get('/filters', async (_req, res: Response) => {
   try {
     const filters = await getFilters();
     res.json({ success: true, data: filters });
