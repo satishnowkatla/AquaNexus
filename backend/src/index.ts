@@ -17,6 +17,7 @@ import aquaadvisorRoutes from './routes/aquaadvisor.routes';
 import aquafeedRoutes from './routes/aquafeed.routes';
 import aquaconnectRoutes from './routes/aquaconnect.routes';
 import marketRoutes from './routes/market.routes';
+import alertsRoutes from './routes/alerts.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,6 +37,7 @@ app.use('/api/aquaadvisor', aquaadvisorRoutes);
 app.use('/api/aquafeed', aquafeedRoutes);
 app.use('/api/aquaconnect', aquaconnectRoutes);
 app.use('/api/market', marketRoutes);
+app.use('/api/alerts', alertsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

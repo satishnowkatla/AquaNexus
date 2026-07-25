@@ -55,6 +55,12 @@ type Member = {
 type Alert = {
   id: string; title: string; message: string;
   alert_type: string; priority: string; created_at: string;
+  district?: string; source?: string; action?: string;
+};
+type FeedIngredient = {
+  id: string; name: string; name_te: string; category: string;
+  price_per_kg: number; trend: string; change_percent: number;
+  price_date: string; source: string;
 };
 
 export default function AquaConnectScreen() {
@@ -77,6 +83,9 @@ export default function AquaConnectScreen() {
   const [marketList, setMarketList] = useState<Array<{ id: number; name: string; district: string }>>([]);
   const [selectedFarmerDistrict, setSelectedFarmerDistrict] = useState<string>('all');
   const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
+  const [feedPrices, setFeedPrices] = useState<FeedIngredient[]>([]);
+  const [liveAlerts, setLiveAlerts] = useState<Alert[]>([]);
+  const [alertDistrict, setAlertDistrict] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [dataSource, setDataSource] = useState<string>('');
 
@@ -149,6 +158,18 @@ export default function AquaConnectScreen() {
             setDataSource(dataSource || 'Supabase (Benchmark)');
           }
         }
+      }
+
+      // Fetch live alerts and feed prices from backend
+      try {
+        const [alertsRes, feedRes] = await Promise.all([
+          fetch(`${API_URL}/api/alerts/daily`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => null),
+          fetch(`${API_URL}/api/alerts/feed-prices`, { signal: AbortSignal.timeout(10000) }).then(r => r.json()).catch(() => null),
+        ]);
+        if (alertsRes?.success && alertsRes.data) setLiveAlerts(alertsRes.data);
+        if (feedRes?.success && feedRes.data) setFeedPrices(feedRes.data);
+      } catch {
+        // Backend unavailable for alerts/feed
       }
     } catch (err) {
       console.warn('AquaConnect error:', err);
@@ -662,18 +683,121 @@ export default function AquaConnectScreen() {
         {/* ALERTS TAB */}
         {tab === 'alerts' && (
           <>
-            <Text style={s.sectionTitle}>Cooperative Alerts</Text>
-            {alerts.length === 0 && <Text style={s.emptyTab}>No alerts</Text>}
-            {alerts.map(a => (
-              <View key={a.id} style={s.alertCard}>
-                <View style={[s.alertPriority, { backgroundColor: a.priority === 'high' ? theme.colors.red : a.priority === 'medium' ? theme.colors.amber : theme.colors.green }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.alertTitle}>{a.title}</Text>
-                  <Text style={s.alertMsg}>{a.message}</Text>
-                  <Text style={s.alertTime}>{formatTime(a.created_at)}</Text>
-                </View>
+            <View style={s.marketHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.sectionTitle}>Smart Alerts & Feed Prices</Text>
+                <Text style={s.sectionSub}>Live from weather stations + AP feed markets</Text>
               </View>
-            ))}
+            </View>
+
+            {/* District Filter for Alerts */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filterContent}>
+              {(() => {
+                const districts = [...new Set([...liveAlerts.map(a => a.district).filter(Boolean), ...alerts.map(a => a.district).filter(Boolean)])].sort();
+                return [{ key: 'all', label: '🏛 All AP' }, ...districts.map(d => ({ key: d, label: `📍 ${d}` }))];
+              })().map(f => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[s.filterChip, alertDistrict === f.key && { backgroundColor: MODULE_COLOR }]}
+                  onPress={() => f.key && setAlertDistrict(f.key)}
+                >
+                  <Text style={[s.filterText, alertDistrict === f.key && { color: theme.colors.white, fontWeight: '600' }]}>{f.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Live Alerts from Backend */}
+            {liveAlerts.length > 0 && (
+              <>
+                <Text style={[s.sectionTitle, { marginTop: theme.spacing.sm }]}>🔴 Live Alerts</Text>
+                {liveAlerts
+                  .filter(a => alertDistrict === 'all' || a.district === alertDistrict)
+                  .sort((a, b) => { const p: Record<string, number> = { high: 0, medium: 1, low: 2 }; return (p[a.priority] ?? 2) - (p[b.priority] ?? 2); })
+                  .map(a => {
+                    const typeEmoji: Record<string, string> = { weather: '🌦', disease: '🦠', feeding: '🍽', market: '📊', general: '📢' };
+                    return (
+                      <View key={a.id} style={s.alertCard}>
+                        <View style={[s.alertPriority, { backgroundColor: a.priority === 'high' ? theme.colors.red : a.priority === 'medium' ? theme.colors.amber : theme.colors.green }]} />
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontSize: 14 }}>{typeEmoji[a.alert_type] || '📢'}</Text>
+                            <Text style={s.alertTitle}>{a.title}</Text>
+                          </View>
+                          <Text style={s.alertMsg}>{a.message}</Text>
+                          {a.action && (
+                            <View style={[s.alertAction, { backgroundColor: MODULE_COLOR + '10' }]}>
+                              <Text style={[s.alertActionText, { color: MODULE_COLOR }]}>✅ {a.action}</Text>
+                            </View>
+                          )}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                            <Text style={s.alertTime}>{a.source || 'AI Alert'} • {a.district || 'AP'}</Text>
+                            <View style={[s.alertPriorityBadge, { backgroundColor: a.priority === 'high' ? theme.colors.red + '20' : a.priority === 'medium' ? theme.colors.amber + '20' : theme.colors.green + '20' }]}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: a.priority === 'high' ? theme.colors.red : a.priority === 'medium' ? theme.colors.amber : theme.colors.green }}>{a.priority}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+              </>
+            )}
+
+            {liveAlerts.length === 0 && (
+              <View style={s.noDataCard}>
+                <Text style={s.noDataIcon}>📡</Text>
+                <Text style={s.noDataTitle}>Loading live alerts...</Text>
+                <Text style={s.noDataDesc}>Fetching weather data from 8 AP districts</Text>
+              </View>
+            )}
+
+            {/* Cooperative Alerts from Supabase */}
+            {alerts.length > 0 && (
+              <>
+                <Text style={[s.sectionTitle, { marginTop: theme.spacing.md }]}>📋 Community Alerts</Text>
+                {alerts.map(a => (
+                  <View key={a.id} style={s.alertCard}>
+                    <View style={[s.alertPriority, { backgroundColor: a.priority === 'high' ? theme.colors.red : a.priority === 'medium' ? theme.colors.amber : theme.colors.green }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.alertTitle}>{a.title}</Text>
+                      <Text style={s.alertMsg}>{a.message}</Text>
+                      <Text style={s.alertTime}>{formatTime(a.created_at)}</Text>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {/* FEED PRICES SECTION */}
+            {feedPrices.length > 0 && (
+              <>
+                <Text style={[s.sectionTitle, { marginTop: theme.spacing.md }]}>💰 Feed Ingredient Prices</Text>
+                <Text style={s.sectionSub}>Today's AP feed market rates</Text>
+                {(['protein', 'energy', 'lipid', 'additive'] as const).map(cat => {
+                  const items = feedPrices.filter(f => f.category === cat);
+                  if (items.length === 0) return null;
+                  const catLabel: Record<string, string> = { protein: '🥩 Protein Sources', energy: '⚡ Energy Sources', lipid: '🫗 Lipids & Oils', additive: '💊 Additives & Vitamins' };
+                  return (
+                    <View key={cat}>
+                      <Text style={[s.typeHeaderRow, { marginTop: theme.spacing.sm }]}><Text style={s.typeHeaderText}>{catLabel[cat]}</Text></Text>
+                      {items.map(f => (
+                        <View key={f.id} style={s.feedCard}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.feedName}>{f.name}</Text>
+                            <Text style={s.feedNameTe}>{f.name_te}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={s.feedPrice}>₹{f.price_per_kg}/kg</Text>
+                            <Text style={[s.feedChange, { color: f.trend === 'up' ? theme.colors.red : f.trend === 'down' ? theme.colors.green : theme.colors.textLight }]}>
+                              {f.trend === 'up' ? '↑' : f.trend === 'down' ? '↓' : '→'} {Math.abs(f.change_percent)}%
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })}
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -817,6 +941,16 @@ const s = StyleSheet.create({
   alertTitle: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
   alertMsg: { fontSize: 12, color: theme.colors.textLight, marginTop: 4, lineHeight: 18 },
   alertTime: { fontSize: 11, color: theme.colors.textLight, marginTop: 6 },
+  alertAction: { marginTop: 6, paddingVertical: 4, paddingHorizontal: 8, borderRadius: theme.borderRadius.sm },
+  alertActionText: { fontSize: 12, fontWeight: '500' },
+  alertPriorityBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: theme.borderRadius.sm },
+
+  // Feed Prices
+  feedCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.white, borderRadius: theme.borderRadius.md, padding: theme.spacing.md, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
+  feedName: { fontSize: 13, fontWeight: '600', color: theme.colors.text },
+  feedNameTe: { fontSize: 11, color: theme.colors.textLight, marginTop: 1 },
+  feedPrice: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
+  feedChange: { fontSize: 11, fontWeight: '600', marginTop: 2 },
 
   // Modal
   emptyTab: { textAlign: 'center', color: theme.colors.textLight, fontSize: 13, paddingVertical: 30 },
