@@ -55,38 +55,19 @@ export default function AquaConnectScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      // Fetch community data from Supabase + market prices + weather from backend API in parallel
-      const [postsRes, membersRes, alertsRes, pricesRes, weatherRes] = await Promise.all([
+      // Fetch community data from Supabase + weather directly + market from Supabase fallback
+      const [postsRes, membersRes, alertsRes, weatherRes, pricesRes] = await Promise.all([
         supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
         supabase.from('users').select('id, full_name, phone, role, created_at').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
-        fetch(`${API_URL}/api/market/prices`).then(r => r.json()).catch(() => ({ success: false, data: [] })),
-        fetch(`${API_URL}/api/market/weather`).then(r => r.json()).catch(() => ({ success: false, data: null })),
+        fetch('https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7').then(r => r.json()).catch(() => null),
+        supabase.from('market_prices').select('*').order('price_date', { ascending: false }).limit(20),
       ]);
       if (postsRes.data) setPosts(postsRes.data);
       if (membersRes.data) setMembers(membersRes.data);
       if (alertsRes.data) setAlerts(alertsRes.data);
-      if (weatherRes.success && weatherRes.data) setWeather(weatherRes.data);
-
-      // Handle market prices from scraped data
-      if (pricesRes.success && pricesRes.data?.length > 0) {
-        setPrices(pricesRes.data.map((p: any, i: number) => ({
-          id: String(i),
-          species: p.species,
-          variety: p.variety || 'General',
-          price_per_kg: p.price_per_kg || 0,
-          min_price: p.min_price || 0,
-          max_price: p.max_price || 0,
-          market_name: p.market_name,
-          district: p.district,
-          price_date: p.price_date,
-          trend: p.trend || 'stable',
-        })));
-      } else {
-        // Fallback: use Supabase seed data
-        const { data: seedPrices } = await supabase.from('market_prices').select('*').order('price_date', { ascending: false }).limit(20);
-        if (seedPrices) setPrices(seedPrices);
-      }
+      if (weatherRes) setWeather(weatherRes);
+      if (pricesRes.data) setPrices(pricesRes.data);
     } catch (err) {
       console.warn('AquaConnect error:', err);
     } finally {
