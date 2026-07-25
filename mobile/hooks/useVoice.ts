@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 
 interface UseVoiceReturn {
   isRecording: boolean;
@@ -12,24 +12,17 @@ interface UseVoiceReturn {
 export const useVoice = (): UseVoiceReturn => {
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startRecording = useCallback(async (): Promise<string | null> => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) return null;
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) return null;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-
-      recordingRef.current = recording;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setIsRecording(true);
       setDuration(0);
 
@@ -42,51 +35,44 @@ export const useVoice = (): UseVoiceReturn => {
       console.error('Failed to start recording:', error);
       return null;
     }
-  }, []);
+  }, [recorder]);
 
   const stopRecording = useCallback(async (): Promise<string | null> => {
-    if (!recordingRef.current) return null;
-
     try {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
 
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      recorder.stop();
+      const uri = recorder.uri;
 
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await setAudioModeAsync({ allowsRecording: false });
       setIsRecording(false);
       setDuration(0);
 
-      return uri;
+      return uri ?? null;
     } catch (error) {
       console.error('Failed to stop recording:', error);
       return null;
     }
-  }, []);
+  }, [recorder]);
 
   const cancelRecording = useCallback(async (): Promise<void> => {
-    if (!recordingRef.current) return;
-
     try {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
 
-      await recordingRef.current.stopAndUnloadAsync();
-      recordingRef.current = null;
-
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
       setIsRecording(false);
       setDuration(0);
     } catch (error) {
       console.error('Failed to cancel recording:', error);
     }
-  }, []);
+  }, [recorder]);
 
   return {
     isRecording,
