@@ -25,55 +25,6 @@ export interface MarketPrice {
   species_type: string;
 }
 
-const SPECIES_TYPE_MAP: Record<string, string> = {
-  'Whiteleg Shrimp': 'shrimp',
-  'Indian nylon shrimp': 'shrimp',
-  'Kiddi shrimp': 'shrimp',
-  'Giant tiger prawn': 'prawn',
-  'Indian white prawn': 'prawn',
-  'Flower tail prawn': 'prawn',
-  'Jinga prawn': 'prawn',
-  'Blue Swimming Crab': 'crab',
-  'Flowercrab': 'crab',
-  'Green mud crab': 'crab',
-  'Spotted crab': 'crab',
-};
-
-const FRESHWATER_FISH = new Set([
-  'Rohu', 'Catla', 'Mrigal', 'Tilapia', 'Roopchand', 'Grass carp',
-  'Common carp', 'Silver carp', 'Carnatic carp', 'Reba Carp', 'Pool Barb',
-  'Murrel', 'Magur', 'Singhi', 'Pangas catfish', 'Giant catfish',
-  'Pabo Catfish', 'Indian featherback or Chital', 'Bronze Featherback',
-  'Climbing Perch', 'Giant Snakehead', 'Green Snake head', 'Assamese snake head',
-  'Indian Glassy Fish', 'Stripped Gourami', 'Tiger loach', 'Zebra Danio',
-  'Zig zag eel', 'Short fin eel', 'Rainbow Trout', 'Chocolate Mahseer',
-  'Golden Mahseer', 'Indian trout', 'Black Rohu',
-]);
-
-const MARINE_FISH = new Set([
-  'Hilsa shad', 'Indian mackerel', 'Oil sardine', 'White sardine',
-  'Rainbow sardine', 'Indian anchovy', 'Malabar anchovy', 'Mustached anchovy',
-  'Pomfret', 'Silver pomfret', 'Black pomfret', 'Indian scad',
-  'Indian river shad', 'Indo-pacific seer fish', 'Narrow-barred spanish mackerel',
-  'Indo-pacific sail fish', 'Big eye thresher', 'Big eye trevally',
-  'Big eye tuna', 'Frigate tuna', 'Little tuna', 'Long tail tuna',
-  'Skipjack tuna', 'Yellowfin tuna', 'Pelagic thresher',
-  'Asian Seabass', 'Burmese King Fish', 'Indian thread fin',
-  'Four finger thread fin', 'Talang queen fish', 'Striped bonito',
-  'Torpedo scad', 'Horse Mackerel', 'Great barracuda',
-  'Pickhandle barracuda', 'Sword fish', 'Milk fish', 'Milk shark',
-  'Bearded croaker', 'Lesser tigertooth croaker', 'Spotted croaker',
-  'John\'s snapper', 'Mangrove snapper', 'Malabar grouper', 'Malabar blood snapper',
-  'Granulated guitar fish', 'Giant guitar fish',
-  'Spade nose shark', 'Big-eyes', 'Japanese threadfin bream',
-  'Splendid pony fish', 'Silver Belly', 'Silver sillago',
-  'Black barred half beak', 'Needle cuttle fish', 'Pharaoh cuttle fish',
-  'Spineless cuttle fish', 'Indian squid', 'Rock lobster',
-  'Flat head lobster', 'Brown mussel', 'Green mussel', 'Oyster',
-  'Spotted eagle ray', 'Smooth brass snake head', 'False trevally',
-  'Indian mackerel',
-]);
-
 const MARKET_ID_DISTRICT: Record<number, string> = {
   3: 'West Godavari',
   195: 'Krishna',
@@ -86,9 +37,35 @@ const MARKET_ID_DISTRICT: Record<number, string> = {
 };
 
 function getSpeciesType(name: string): string {
-  if (SPECIES_TYPE_MAP[name]) return SPECIES_TYPE_MAP[name];
-  if (FRESHWATER_FISH.has(name)) return 'freshwater_fish';
-  if (MARINE_FISH.has(name)) return 'marine_fish';
+  const n = name.toLowerCase();
+
+  if (n.includes('shrimp')) return 'shrimp';
+  if (n.includes('prawn')) return 'prawn';
+  if (n.includes('crab')) return 'crab';
+  if (n.includes('lobster') || n.includes('mussel') || n.includes('oyster') || n.includes('squid') || n.includes('cuttle')) return 'crab';
+
+  const freshwaterKeywords = [
+    'rohu', 'catla', 'mrigal', 'tilapia', 'roopchand', 'carp', 'murrel', 'magur',
+    'singhi', 'pangas', 'featherback', 'climbing perch', 'snakehead', 'gourami',
+    'loach', 'danio', 'eel', 'trout', 'mahseer', 'barb', 'pabda', 'pabo',
+    'anabas', 'channa', 'heteropneustes', 'wallago', 'gibel', 'rasbora',
+    'koi', 'goldfish', 'betta', 'puntius', 'labeo', 'cirrhinus', 'hypophthalmichthys',
+  ];
+  if (freshwaterKeywords.some(k => n.includes(k))) return 'freshwater_fish';
+
+  const marineKeywords = [
+    'mackerel', 'sardine', 'anchovy', 'pomfret', 'tuna', 'seer', 'king fish',
+    'kingfish', 'barracuda', 'shark', 'ray', 'stingray', 'grouper', 'snapper',
+    'bream', 'trevally', 'jack', 'bonito', 'sailfish', 'sword', 'marlin',
+    'hilsa', 'milkfish', 'milk fish', 'croaker', 'threadfin', 'scad',
+    'pony fish', 'sillago', 'half beak', 'seabass', 'sea bass', 'cod',
+    'sole', 'flatfish', 'flounder', 'halibut', 'squid', 'octopus',
+    'silago', ' emperor', 'spanish', 'whiting',
+  ];
+  if (marineKeywords.some(k => n.includes(k))) return 'marine_fish';
+
+  if (n.includes('fish') || n.includes('mathi') || n.includes('nethili')) return 'marine_fish';
+
   return 'other';
 }
 
