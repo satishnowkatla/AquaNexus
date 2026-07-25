@@ -74,35 +74,15 @@ const MARINE_FISH = new Set([
   'Indian mackerel',
 ]);
 
-const MARKET_DISTRICT: Record<string, string> = {
-  'Amalapuram Fish Market': 'Dr.B.R.A.Konaseema',
-  'Anantapuram Fish Market': 'Anantapur',
-  'Bapatla Fish Market': 'Bapatla',
-  'Bheemili Municipal Fish Market': 'Visakhapatnam',
-  'Bobbili Fish Market': 'Vizianagaram',
-  'Chittoor Fish Market': 'Chittoor',
-  'Eluru Wholesale Fish Market  (New Market)': 'West Godavari',
-  'Fish Market Darsipeta': 'Srikakulam',
-  'Fish Market Ibrahimpatnam': 'Krishna',
-  'Fish Market Payakapuram': 'East Godavari',
-  'Hanumantharaya Fish Market': 'Anantapur',
-  'Jalapushpa Bhavan Wholesale Fish Market': 'Guntur',
-  'Jangareddygudem Fish Market': 'West Godavari',
-  'Kurnool Fish Market ( King Market)': 'Kurnool',
-  'Machilipatnam wholesale & Retail Fish Market': 'Krishna',
-  'Mahanti Fish Market': 'East Godavari',
-  'Nandi Kotkuru Fish Market': 'West Godavari',
-  'Palamaneru Fish Market': 'Chittoor',
-  'Parvathipuram Fish Market': 'Vizianagaram',
-  'Rajam Fish Market': 'Srikakulam',
-  'Salur Fish Market': 'Vizianagaram',
-  'SUDA ( Srikakulam Urban Dev. Authority ) Fish Market': 'Srikakulam',
-  'Tekkali Fish Market': 'Srikakulam',
-  'Tirupathi Fish Market': 'Tirupathi',
-  'Tuni Retail Fish Market': 'East Godavari',
-  'Venlok Fish Market': 'East Godavari',
-  'Visakhapatnam Municipal Wholesale Fish market': 'Visakhapatnam',
-  'Vizayanagaram Fish Market': 'Vizianagaram',
+const MARKET_ID_DISTRICT: Record<number, string> = {
+  3: 'West Godavari',
+  195: 'Krishna',
+  531: 'Visakhapatnam',
+  537: 'Dr. B.R. Ambedkar Konaseema',
+  730: 'Kurnool',
+  539: 'Guntur',
+  726: 'Srikakulam',
+  742: 'Tirupathi',
 };
 
 function getSpeciesType(name: string): string {
@@ -112,12 +92,8 @@ function getSpeciesType(name: string): string {
   return 'other';
 }
 
-function getDistrict(marketName: string): string {
-  if (MARKET_DISTRICT[marketName]) return MARKET_DISTRICT[marketName];
-  for (const [key, val] of Object.entries(MARKET_DISTRICT)) {
-    if (marketName.includes(key) || key.includes(marketName)) return val;
-  }
-  return 'Andhra Pradesh';
+function getDistrictById(marketId: number): string {
+  return MARKET_ID_DISTRICT[marketId] || 'Andhra Pradesh';
 }
 
 let cache: { data: MarketPrice[]; fetchedAt: number } | null = null;
@@ -136,7 +112,7 @@ async function fetchNfdbForMarket(marketId: number, marketName: string, dateStr:
     const json = await res.json() as any;
     if (!json.data || !Array.isArray(json.data)) return [];
 
-    const district = getDistrict(marketName);
+    const district = getDistrictById(marketId);
     return json.data.map((row: any[], idx: number) => {
       const [_, species, size, priceStr, date] = row;
       const price = parseFloat(priceStr);
@@ -162,15 +138,15 @@ async function fetchNfdbForMarket(marketId: number, marketName: string, dateStr:
   }
 }
 
-const TOP_MARKETS: Array<{ id: number; name: string }> = [
-  { id: 3, name: 'Eluru Fish Market' },
-  { id: 195, name: 'Machilipatnam Fish Market' },
-  { id: 531, name: 'Visakhapatnam Fish Market' },
-  { id: 537, name: 'Amalapuram Fish Market' },
-  { id: 730, name: 'Kurnool Fish Market' },
-  { id: 539, name: 'Jalapushpa Bhavan Fish Market' },
-  { id: 726, name: 'Srikakulam Fish Market' },
-  { id: 742, name: 'Tirupathi Fish Market' },
+const TOP_MARKETS: Array<{ id: number; name: string; district: string }> = [
+  { id: 3, name: 'Eluru Wholesale Fish Market', district: 'West Godavari' },
+  { id: 195, name: 'Machilipatnam Fish Market', district: 'Krishna' },
+  { id: 531, name: 'Visakhapatnam Fish Market', district: 'Visakhapatnam' },
+  { id: 537, name: 'Amalapuram Fish Market', district: 'Dr. B.R. Ambedkar Konaseema' },
+  { id: 730, name: 'Kurnool Fish Market', district: 'Kurnool' },
+  { id: 539, name: 'Jalapushpa Bhavan Fish Market', district: 'Guntur' },
+  { id: 726, name: 'Srikakulam Fish Market', district: 'Srikakulam' },
+  { id: 742, name: 'Tirupathi Fish Market', district: 'Tirupathi' },
 ];
 
 async function fetchFromNfdb(): Promise<MarketPrice[]> {
@@ -209,7 +185,7 @@ export async function getMarketsList(): Promise<Array<{ id: number; name: string
   return TOP_MARKETS.map(m => ({
     id: m.id,
     name: m.name,
-    district: getDistrict(m.name),
+    district: m.district,
   }));
 }
 
@@ -230,7 +206,7 @@ export async function getFilters(): Promise<any> {
   return {
     source: 'NFDB FMPIS (Government of India)',
     species_types: ['shrimp', 'prawn', 'freshwater_fish', 'marine_fish', 'crab', 'other'],
-    markets: TOP_MARKETS.map(m => ({ id: m.id, name: m.name, district: getDistrict(m.name) })),
+    markets: TOP_MARKETS.map(m => ({ id: m.id, name: m.name, district: m.district })),
     state: 'Andhra Pradesh',
   };
 }
