@@ -49,6 +49,7 @@ type MarketPrice = {
 type Member = {
   id: string; full_name: string; phone: string;
   role: string; created_at: string;
+  profiles?: { district?: string; village?: string; primary_species?: string; total_pond_area?: number; years_experience?: number }[];
 };
 type Alert = {
   id: string; title: string; message: string;
@@ -81,7 +82,7 @@ export default function AquaConnectScreen() {
       // Fetch community data from Supabase + weather directly
       const [postsRes, membersRes, alertsRes, weatherRes] = await Promise.all([
         supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
-        supabase.from('users').select('id, full_name, phone, role, created_at').order('created_at', { ascending: false }),
+        supabase.from('users').select('id, full_name, phone, role, created_at, profiles(district, village, primary_species, total_pond_area, years_experience)').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
         fetch('https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7').then(r => r.json()).catch(() => null),
       ]);
@@ -471,20 +472,39 @@ export default function AquaConnectScreen() {
           <>
             <Text style={s.sectionTitle}>Cooperative Members</Text>
             <Text style={s.sectionSub}>{members.length} members in Krishna Delta Fish Farmers</Text>
-            {members.map((m, i) => (
-              <View key={m.id || i} style={s.memberCard}>
-                <View style={[s.avatar, { backgroundColor: MODULE_COLOR + '20' }]}>
-                  <Text style={[s.avatarText, { color: MODULE_COLOR }]}>{m.full_name?.charAt(0) || '?'}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.memberName}>{m.full_name}</Text>
-                  <Text style={s.memberPhone}>{m.phone}</Text>
-                </View>
-                <TouchableOpacity style={[s.callBtn, { backgroundColor: MODULE_COLOR }]} onPress={() => Linking.openURL(`tel:${m.phone}`)}>
-                  <Text style={s.callText}>Call</Text>
+            {members.length === 0 && <Text style={s.emptyTab}>No members found</Text>}
+            {members.map((m, i) => {
+              const profile = m.profiles?.[0];
+              const speciesLabel: Record<string, string> = { shrimp: '🦐 Shrimp', prawn: '🦞 Prawn', fish: '🐟 Fish' };
+              return (
+                <TouchableOpacity key={m.id || i} style={s.memberCard} activeOpacity={0.7}>
+                  <View style={[s.avatar, { backgroundColor: MODULE_COLOR + '20' }]}>
+                    <Text style={[s.avatarText, { color: MODULE_COLOR }]}>{m.full_name?.charAt(0) || '?'}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={s.memberName}>{m.full_name}</Text>
+                      {m.role === 'cooperative' && (
+                        <View style={[s.roleBadge, { backgroundColor: theme.colors.amber + '20' }]}>
+                          <Text style={[s.roleBadgeText, { color: theme.colors.amber }]}>Leader</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={s.memberPhone}>📱 {m.phone}</Text>
+                    {profile && (
+                      <View style={s.memberDetails}>
+                        {profile.village && <Text style={s.memberDetail}>📍 {profile.village}, {profile.district}</Text>}
+                        {profile.primary_species && <Text style={s.memberDetail}>{speciesLabel[profile.primary_species] || profile.primary_species} • {profile.total_pond_area} acres</Text>}
+                        {profile.years_experience && <Text style={s.memberDetail}>🕐 {profile.years_experience} years experience</Text>}
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity style={[s.callBtn, { backgroundColor: MODULE_COLOR }]} onPress={() => Linking.openURL(`tel:${m.phone}`)}>
+                    <Text style={s.callText}>Call</Text>
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </View>
-            ))}
+              );
+            })}
           </>
         )}
 
@@ -611,6 +631,10 @@ const s = StyleSheet.create({
   avatarText: { fontSize: theme.fontSize.lg, fontWeight: '700' },
   memberName: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
   memberPhone: { fontSize: 12, color: theme.colors.textLight, marginTop: 1 },
+  memberDetails: { marginTop: 4, gap: 2 },
+  memberDetail: { fontSize: 11, color: theme.colors.textLight, lineHeight: 16 },
+  roleBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
+  roleBadgeText: { fontSize: 10, fontWeight: '600' },
   callBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
   callText: { color: theme.colors.white, fontSize: 12, fontWeight: '600' },
 
