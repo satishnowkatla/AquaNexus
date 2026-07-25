@@ -28,7 +28,7 @@ type MarketPrice = {
   price_per_kg: number; min_price?: number; max_price?: number;
   market_name: string;
   district: string; price_date: string; trend: string;
-  data_source?: string; unit?: string;
+  data_source?: string; unit?: string; species_type?: string;
 };
 type Member = {
   id: string; full_name: string; phone: string;
@@ -54,7 +54,9 @@ export default function AquaConnectScreen() {
   const [posting, setPosting] = useState(false);
   const [weather, setWeather] = useState<any>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<string>('all');
+  const [selectedSpeciesType, setSelectedSpeciesType] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [dataSource, setDataSource] = useState<string>('');
 
   const fetchData = useCallback(async () => {
     try {
@@ -88,11 +90,13 @@ export default function AquaConnectScreen() {
               district: p.district,
               price_date: p.price_date || new Date().toISOString().split('T')[0],
               trend: p.trend,
-              data_source: p.data_source || 'agmarknet',
+              data_source: p.data_source || 'nfdb_govt',
               unit: p.unit || 'per_kg',
+              species_type: p.species_type || 'other',
             }));
             setPrices(mapped);
             gotLivePrices = true;
+            setDataSource(liveData.source === 'nfdb' ? 'NFDB FMPIS (Govt of India)' : liveData.source || 'Live Data');
             const latestDate = mapped[0]?.price_date;
             if (latestDate) setLastUpdated(new Date(latestDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }));
           }
@@ -257,24 +261,34 @@ export default function AquaConnectScreen() {
 
             <View style={s.marketHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={s.sectionTitle}>Fish & Shrimp Prices</Text>
-                <Text style={s.sectionSub}>{lastUpdated ? `Updated ${lastUpdated}` : 'Loading...'}</Text>
+                <Text style={s.sectionTitle}>Market Prices</Text>
+                <Text style={s.sectionSub}>
+                  {lastUpdated ? `${lastUpdated}` : 'Loading...'}
+                  {dataSource ? ` • ${dataSource}` : ''}
+                </Text>
               </View>
               <TouchableOpacity style={[s.refreshBadge, { backgroundColor: MODULE_COLOR }]} onPress={onRefresh}>
                 <Text style={s.refreshText}>↻ Refresh</Text>
               </TouchableOpacity>
             </View>
 
-            {/* District Filter */}
+            {/* Species Type Filter */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.filterScroll} contentContainerStyle={s.filterContent}>
-              {['all', ...Array.from(new Set(prices.map(p => p.district).filter(Boolean)))].map(d => (
+              {[
+                { key: 'all', label: 'All Species' },
+                { key: 'shrimp', label: '🦐 Shrimp' },
+                { key: 'prawn', label: '🦞 Prawn' },
+                { key: 'freshwater_fish', label: '🐟 Freshwater' },
+                { key: 'marine_fish', label: '🐠 Marine' },
+                { key: 'crab', label: '🦀 Crab' },
+              ].map(f => (
                 <TouchableOpacity
-                  key={d}
-                  style={[s.filterChip, selectedDistrict === d && { backgroundColor: MODULE_COLOR }]}
-                  onPress={() => setSelectedDistrict(d)}
+                  key={f.key}
+                  style={[s.filterChip, selectedSpeciesType === f.key && { backgroundColor: MODULE_COLOR }]}
+                  onPress={() => setSelectedSpeciesType(f.key)}
                 >
-                  <Text style={[s.filterText, selectedDistrict === d && { color: theme.colors.white, fontWeight: '600' }]}>
-                    {d === 'all' ? 'All Districts' : d}
+                  <Text style={[s.filterText, selectedSpeciesType === f.key && { color: theme.colors.white, fontWeight: '600' }]}>
+                    {f.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -284,21 +298,31 @@ export default function AquaConnectScreen() {
 
             {/* Group prices by species */}
             {(() => {
-              const filtered = selectedDistrict === 'all' ? prices : prices.filter(p => p.district === selectedDistrict);
+              const filtered = prices.filter(p => {
+                if (selectedSpeciesType !== 'all' && p.species_type !== selectedSpeciesType) return false;
+                return true;
+              });
               const grouped = filtered.reduce((acc, p) => {
                 if (!acc[p.species]) acc[p.species] = [];
                 acc[p.species].push(p);
                 return acc;
               }, {} as Record<string, MarketPrice[]>);
 
+              const typeLabels: Record<string, string> = {
+                shrimp: '🦐 Shrimp',
+                prawn: '🦞 Prawn',
+                freshwater_fish: '🐟 Freshwater Fish',
+                marine_fish: '🐠 Marine Fish',
+                crab: '🦀 Crab',
+                other: '🐟 Fish',
+              };
+
               return Object.entries(grouped).map(([species, items]) => (
                 <View key={species} style={s.speciesSection}>
                   <View style={s.speciesHeader}>
                     <Text style={s.speciesName}>{species}</Text>
-                    <View style={[s.sourceBadge, { backgroundColor: items[0]?.data_source === 'agmarknet' ? theme.colors.green + '20' : theme.colors.blue + '15' }]}>
-                      <Text style={[s.sourceText, { color: items[0]?.data_source === 'agmarknet' ? theme.colors.green : theme.colors.blue }]}>
-                        {items[0]?.data_source === 'agmarknet' ? '🏛 Govt Mandi' : '📊 Benchmark'}
-                      </Text>
+                    <View style={s.sourceBadge}>
+                      <Text style={s.sourceText}>🏛 Govt of India</Text>
                     </View>
                   </View>
                   {items.map(p => (
@@ -307,11 +331,11 @@ export default function AquaConnectScreen() {
                         <Text style={s.priceVariety}>{p.variety}</Text>
                         <Text style={s.priceMarket}>📍 {p.market_name}</Text>
                         {p.min_price != null && p.max_price != null && (
-                          <Text style={s.priceRange}>Range: ₹{p.min_price.toFixed(0)} – ₹{p.max_price.toFixed(0)}</Text>
+                          <Text style={s.priceRange}>Range: ₹{p.min_price} – ₹{p.max_price}/kg</Text>
                         )}
                       </View>
                       <View style={s.priceRight}>
-                        <Text style={[s.priceValue, { color: theme.colors.text }]}>₹{p.price_per_kg.toFixed(0)}</Text>
+                        <Text style={[s.priceValue, { color: theme.colors.text }]}>₹{p.price_per_kg}</Text>
                         <Text style={s.priceUnit}>per kg</Text>
                         <View style={[s.trendBadge, { backgroundColor: TREND_COLORS[p.trend] + '20' }]}>
                           <Text style={[s.trendText, { color: TREND_COLORS[p.trend] }]}>
@@ -440,8 +464,8 @@ const s = StyleSheet.create({
   speciesSection: { marginBottom: theme.spacing.md },
   speciesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.sm },
   speciesName: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
-  sourceBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  sourceText: { fontSize: 10, fontWeight: '600' },
+  sourceBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: theme.colors.green + '15' },
+  sourceText: { fontSize: 10, fontWeight: '600', color: theme.colors.green },
   sectionTitle: { fontSize: theme.fontSize.md, fontWeight: '700', color: theme.colors.text, marginBottom: 2 },
   sectionSub: { fontSize: 12, color: theme.colors.textLight, marginBottom: theme.spacing.sm },
   priceCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.xs, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' },
