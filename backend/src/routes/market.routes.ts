@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { getFishPricesInAP, getFilters } from '../services/market.service';
+import { getFishPricesInAP, getWeatherAP, getFilters } from '../services/market.service';
 
 const router = Router();
 
@@ -11,7 +11,7 @@ router.get('/prices', async (req, res: Response) => {
       success: true,
       data: prices,
       count: prices.length,
-      source: prices.length > 0 ? 'agmarknet' : 'unavailable',
+      source: prices.length > 0 ? 'agmarknet-scrape' : 'unavailable',
       fetchedAt: new Date().toISOString(),
     });
   } catch (error: any) {
@@ -22,16 +22,30 @@ router.get('/prices', async (req, res: Response) => {
   }
 });
 
-// Get available filters (commodities, states, etc.)
+// Get weather for Andhra Pradesh
+router.get('/weather', async (req, res: Response) => {
+  try {
+    const weather = await getWeatherAP();
+    if (!weather) {
+      res.json({ success: false, error: { message: 'Weather data unavailable' } });
+      return;
+    }
+    res.json({ success: true, data: weather });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { message: error.message || 'Failed to fetch weather' },
+    });
+  }
+});
+
+// Get filters (stub)
 router.get('/filters', async (req, res: Response) => {
   try {
     const filters = await getFilters();
     res.json({ success: true, data: filters });
   } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: { message: error.message || 'Failed to fetch filters' },
-    });
+    res.status(500).json({ success: false, error: { message: error.message } });
   }
 });
 

@@ -1,127 +1,122 @@
-const AGMARKNET_BASE = 'https://api.agmarknet.gov.in/v1';
+import * as cheerio from 'cheerio';
 
-const HEADERS = {
-  'Accept': 'application/json, text/plain, */*',
-  'Origin': 'https://agmarknet.gov.in',
-  'Referer': 'https://agmarknet.gov.in/',
+const KISAN_FISH_URL = 'https://www.kisandeals.com/mandiprices/FISH/Andhra-Pradesh/ALL';
+const KISAN_PRAWN_URL = 'https://www.kisandeals.com/mandiprices/SHRIMP/Andhra-Pradesh/ALL';
+const KISAN_SHRIMP_URL = 'https://www.kisandeals.com/mandiprices/SHRIMP/Andhra-Pradesh/ALL';
+
+const SCRAPE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
+  'Accept-Language': 'en-US,en;q=0.9',
 };
 
-// AP state_id in AGMARKNET
-const AP_STATE_ID = '28';
-
-// Known fish/shrimp commodity IDs in AGMARKNET
-const FISH_COMMODITY_IDS = [
-  '9',    // Fish
-  '496',  // Fish Dry
-  '630',  // Prawns
-  '631',  // Shrimp
-  '714',  // Fish Wet
-];
-
-interface CachedData {
-  data: any[];
-  fetchedAt: number;
+export interface MarketPrice {
+  species: string;
+  variety: string;
+  price_per_kg: number;
+  min_price: number;
+  max_price: number;
+  market_name: string;
+  district: string;
+  price_date: string;
+  trend: string;
 }
 
-let cache: CachedData | null = null;
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+let cache: { data: MarketPrice[]; fetchedAt: number } | null = null;
+const CACHE_TTL = 3 * 60 * 60 * 1000;
 
-async function agmarknetFetch(path: string, params?: Record<string, string>): Promise<any> {
-  const url = new URL(`${AGMARKNET_BASE}${path}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+function parsePrice(text: string): number {
+  const cleaned = text.replace(/[₹,\s]/g, '');
+  return parseFloat(cleaned) || 0;
+}
+
+function inferTrend(min: number, max: number): string {
+  if (max <= 0 || min <= 0) return 'stable';
+  const spread = (max - min) / min;
+  if (spread > 0.05) return 'up';
+  if (spread < 0.01) return 'stable';
+  return 'down';
+}
+
+async function scrapeKisanDeals(url: string): Promise<MarketPrice[]> {
+  try {
+    const res = await fetch(url, { headers: SCRAPE_HEADERS });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const prices: MarketPrice[] = [];
+
+    // KisanDeals uses a structured table format
+    $('table tbody tr, .price-card, [class*="mandi-row"]').each((_, el) => {
+      const tds = $(el).find('td');
+      if (tds.length >= 7) {
+        const commodity = $(tds[0]).text().trim();
+        const variety = $(tds[1]).text().trim();
+        const market = $(tds[2]).text().trim();
+        const district = $(tds[3]).text().trim();
+        const minP = parsePrice($(tds[4]).text());
+        const modalP = parsePrice($(tds[5]).text());
+        const maxP = parsePrice($(tds[6]).text());
+        const date = tds.length > 7 ? $(tds[7]).text().trim() : new Date().toISOString().split('T')[0];
+
+        if (commodity && modalP > 0) {
+          prices.push({
+            species: commodity,
+            variety: variety || 'General',
+            price_per_kg: modalP / 100,
+            min_price: minP / 100,
+            max_price: maxP / 100,
+            market_name: market,
+            district: district || 'Andhra Pradesh',
+            price_date: date,
+            trend: inferTrend(minP, maxP),
+          });
+        }
+      }
+    });
+
+    return prices;
+  } catch (err) {
+    console.warn(`Scrape ${url} failed:`, err);
+    return [];
   }
-
-  const res = await fetch(url.toString(), { headers: HEADERS });
-
-  if (!res.ok) {
-    throw new Error(`AGMARKNET ${res.status}: ${res.statusText}`);
-  }
-
-  return res.json();
 }
 
-export async function getFilters(): Promise<any> {
-  return agmarknetFetch('/daily-price-arrival/filters');
-}
-
-export async function getFishPricesInAP(): Promise<any[]> {
-  // Check cache
+export async function getFishPricesInAP(): Promise<MarketPrice[]> {
   if (cache && (Date.now() - cache.fetchedAt) < CACHE_TTL) {
     return cache.data;
   }
 
-  const today = new Date();
-  const dateStr = `${today.getDate().toString().padStart(2, '0')}-${(today.getMonth() + 1).toString().padStart(2, '0')}-${today.getFullYear()}`;
+  const [fish, prawn] = await Promise.all([
+    scrapeKisanDeals(KISAN_FISH_URL),
+    scrapeKisanDeals(KISAN_PRAWN_URL),
+  ]);
 
-  try {
-    // Try fetching daily prices for AP state
-    const result = await agmarknetFetch(
-      '/prices-and-arrivals/commodity-wise/daily-report-state',
-      { date: dateStr, state_ids: AP_STATE_ID }
-    );
+  const all = [...fish, ...prawn];
 
-    if (result?.success === false || !result?.data) {
-      // Fallback: try yesterday
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = `${yesterday.getDate().toString().padStart(2, '0')}-${(yesterday.getMonth() + 1).toString().padStart(2, '0')}-${yesterday.getFullYear()}`;
-
-      const result2 = await agmarknetFetch(
-        '/prices-and-arrivals/commodity-wise/daily-report-state',
-        { date: yesterdayStr, state_ids: AP_STATE_ID }
-      );
-
-      if (result2?.data) {
-        const fishData = filterFishData(result2.data, yesterdayStr);
-        cache = { data: fishData, fetchedAt: Date.now() };
-        return fishData;
-      }
-    }
-
-    if (result?.data) {
-      const fishData = filterFishData(result.data, dateStr);
-      cache = { data: fishData, fetchedAt: Date.now() };
-      return fishData;
-    }
-  } catch (err) {
-    console.warn('AGMARKNET fetch failed, using fallback:', err);
+  if (all.length > 0) {
+    cache = { data: all, fetchedAt: Date.now() };
+    return all;
   }
 
-  // Return cached data if available, even if expired
-  if (cache?.data) {
-    return cache.data;
-  }
-
-  // Final fallback: return empty (Supabase seed data will show)
+  if (cache?.data) return cache.data;
   return [];
 }
 
-function filterFishData(data: any[], dateStr: string): any[] {
-  if (!Array.isArray(data)) return [];
+export async function getWeatherAP(): Promise<any> {
+  try {
+    // Vijayawada, AP coordinates
+    const res = await fetch(
+      'https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7',
+    );
+    if (!res.ok) return null;
+    return res.json();
+  } catch (err) {
+    console.warn('Weather fetch failed:', err);
+    return null;
+  }
+}
 
-  return data
-    .filter((item: any) => {
-      const name = (item.commodity_name || item.Commodity || item.commodity || '').toLowerCase();
-      return name.includes('fish') ||
-        name.includes('prawn') ||
-        name.includes('shrimp') ||
-        name.includes('rohu') ||
-        name.includes('catla') ||
-        name.includes('murrel') ||
-        name.includes('pangasius') ||
-        name.includes('tilapia') ||
-        name.includes('carp');
-    })
-    .map((item: any) => ({
-      species: item.commodity_name || item.Commodity || item.commodity || 'Unknown',
-      variety: item.variety || item.Variety || 'General',
-      min_price: Number(item.min_price || item['Min Price'] || 0),
-      max_price: Number(item.max_price || item['Max Price'] || 0),
-      modal_price: Number(item.modal_price || item['Modal Price'] || 0),
-      market_name: item.market_name || item.Market || item.market || 'Unknown',
-      district: item.district || item.District || 'Unknown',
-      date: dateStr,
-    }));
+export async function getFilters(): Promise<any> {
+  return { message: 'Market prices scraped from open-source AGMARKNET data' };
 }
