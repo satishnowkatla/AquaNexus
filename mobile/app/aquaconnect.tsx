@@ -31,17 +31,30 @@ export default function AquaConnectScreen() {
   const [members, setMembers] = useState<Member[]>([]);
   const [isMember, setIsMember] = useState(false);
 
+  const joinCooperative = async (coopId: string, userId: string) => {
+    await supabase.from('cooperative_members').insert({ cooperative_id: coopId, user_id: userId });
+  };
+
   const fetchData = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       // Check membership
-      const { data: membership } = await supabase
+      let { data: membership } = await supabase
         .from('cooperative_members')
         .select('cooperative_id')
         .eq('user_id', user.id)
         .maybeSingle();
+
+      // Auto-join first available cooperative if not a member
+      if (!membership) {
+        const { data: coops } = await supabase.from('cooperatives').select('id').limit(1);
+        if (coops && coops.length > 0) {
+          await joinCooperative(coops[0].id, user.id);
+          membership = { cooperative_id: coops[0].id };
+        }
+      }
 
       if (!membership) {
         setIsMember(false);
