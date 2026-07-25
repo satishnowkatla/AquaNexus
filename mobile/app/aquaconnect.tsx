@@ -9,7 +9,6 @@ import { supabase } from '../utils/supabase';
 import { API_URL } from '../utils/constants';
 import { theme } from '../utils/theme';
 import { MODULE_COLOR_MAP } from '../utils/moduleConfig';
-import { fetchLiveAlerts, getFeedPrices } from '../utils/liveData';
 
 const MODULE_COLOR = MODULE_COLOR_MAP.aquaconnect;
 const COOP_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
@@ -39,12 +38,12 @@ type Post = {
   id: string; content: string; post_type: string;
   likes_count: number; comments_count: number;
   created_at: string; user_id: string;
-  users?: { full_name: string };
-  community_comments?: { id: string; content: string; created_at: string; users?: { full_name: string } }[];
+  users?: { full_name: string } | null;
+  community_comments?: { id: string; content: string; created_at: string; user_id: string; users?: { full_name: string } | null }[];
 };
 type Comment = {
   id: string; post_id: string; user_id: string; content: string; created_at: string;
-  users?: { full_name: string };
+  users?: { full_name: string } | null;
 };
 type MarketPrice = {
   id: string; species: string; variety: string;
@@ -98,17 +97,25 @@ export default function AquaConnectScreen() {
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commenting, setCommenting] = useState<string | null>(null);
-
   const fetchData = useCallback(async () => {
     try {
-      // Fetch community data from Supabase + weather directly
-      const [postsRes, membersRes, alertsRes, weatherRes] = await Promise.all([
-        supabase.from('community_posts').select('*, users(full_name), community_comments(id, content, created_at, users(full_name))').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30),
+      // Fetch posts with author names (try join first, fallback to plain)
+      let postList: Post[] = [];
+      const joinedRes = await supabase.from('community_posts').select('*, users(full_name), community_comments(id, content, created_at, user_id, users(full_name))').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30);
+      if (joinedRes.data && !joinedRes.error) {
+        postList = joinedRes.data;
+      } else {
+        const plainRes = await supabase.from('community_posts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(30);
+        if (plainRes.data) postList = plainRes.data;
+      }
+      setPosts(postList);
+
+      // Fetch members, alerts, weather in parallel
+      const [membersRes, alertsRes, weatherRes] = await Promise.all([
         supabase.from('users').select('id, full_name, phone, role, created_at, profiles(district, village, pincode, primary_species, total_pond_area, years_experience), ponds(id, name, area_acres, species, stocking_density, stocking_date, expected_harvest_date, status)').order('created_at', { ascending: false }),
         supabase.from('cooperative_alerts').select('*').eq('cooperative_id', COOP_ID).order('created_at', { ascending: false }).limit(20),
         fetch('https://api.open-meteo.com/v1/forecast?latitude=16.5062&longitude=80.6480&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weather_code&timezone=Asia%2FKolkata&forecast_days=7').then(r => r.json()).catch(() => null),
       ]);
-      if (postsRes.data) setPosts(postsRes.data);
       if (membersRes.data) setMembers(membersRes.data);
       if (alertsRes.data) setAlerts(alertsRes.data);
       if (weatherRes) setWeather(weatherRes);
@@ -170,16 +177,16 @@ export default function AquaConnectScreen() {
         }
       }
 
-      // Fetch live alerts + feed prices directly (no backend needed)
+      // Fetch live alerts and feed prices from backend
       try {
-        const [liveAlertData, feedData] = await Promise.all([
-          fetchLiveAlerts().catch(() => []),
-          Promise.resolve(getFeedPrices()),
+        const [alertsRes, feedRes] = await Promise.all([
+          fetch(`${API_URL}/api/alerts/daily`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => null),
+          fetch(`${API_URL}/api/alerts/feed-prices`, { signal: AbortSignal.timeout(10000) }).then(r => r.json()).catch(() => null),
         ]);
-        setLiveAlerts(liveAlertData);
-        setFeedPrices(feedData);
+        if (alertsRes?.success && alertsRes.data) setLiveAlerts(alertsRes.data);
+        if (feedRes?.success && feedRes.data) setFeedPrices(feedRes.data);
       } catch {
-        // Fallback: empty data
+        // Backend unavailable for alerts/feed
       }
     } catch (err) {
       console.warn('AquaConnect error:', err);
@@ -191,16 +198,11 @@ export default function AquaConnectScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Real-time subscription to community_posts
   useEffect(() => {
     const channel = supabase
-      .channel('community_posts_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_posts' }, () => {
-        fetchData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_comments' }, () => {
-        fetchData();
-      })
+      .channel('community_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_posts' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'community_comments' }, () => fetchData())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
@@ -232,11 +234,15 @@ export default function AquaConnectScreen() {
     setCommenting(postId);
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id || '00000000-0000-0000-0000-000000000000';
-    await supabase.from('community_comments').insert({
-      post_id: postId, user_id: userId, content: commentText.trim(),
-    });
+    try {
+      await supabase.from('community_comments').insert({
+        post_id: postId, user_id: userId, content: commentText.trim(),
+      });
+    } catch {}
     const { count } = await supabase.from('community_comments').select('*', { count: 'exact', head: true }).eq('post_id', postId);
-    await supabase.from('community_posts').update({ comments_count: count || 0 }).eq('id', postId);
+    try {
+      await supabase.from('community_posts').update({ comments_count: count || 0 }).eq('id', postId);
+    } catch {}
     setCommentText('');
     setCommenting(null);
     fetchData();
@@ -295,10 +301,10 @@ export default function AquaConnectScreen() {
             <TouchableOpacity style={[s.newPostBtn, { backgroundColor: MODULE_COLOR }]} onPress={() => setShowNewPost(true)}>
               <Text style={s.newPostText}>+ New Post</Text>
             </TouchableOpacity>
-            <Text style={s.sectionSub}>{posts.length} posts in your cooperative</Text>
+            <Text style={[s.emptyTab, { paddingVertical: 4 }]}>{posts.length} posts in your cooperative</Text>
             {posts.length === 0 && <Text style={s.emptyTab}>No posts yet. Be the first to share!</Text>}
             {posts.map(p => {
-              const author = p.users?.full_name || 'Anonymous Farmer';
+              const author = (p.users as any)?.full_name || 'Anonymous Farmer';
               const isOpen = expandedPost === p.id;
               const comments = p.community_comments || [];
               return (
@@ -323,18 +329,18 @@ export default function AquaConnectScreen() {
                       <Text style={s.postActionText}>👍 {p.likes_count}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={s.postAction} onPress={() => setExpandedPost(isOpen ? null : p.id)}>
-                      <Text style={s.postActionText}>💬 {p.comments_count} {isOpen ? 'Hide' : 'Comment'}</Text>
+                      <Text style={s.postActionText}>💬 {p.comments_count}{isOpen ? ' Hide' : ' Comment'}</Text>
                     </TouchableOpacity>
                   </View>
 
                   {isOpen && (
                     <View style={s.commentsSection}>
                       {comments.length === 0 && <Text style={s.noCommentsText}>No comments yet. Start the conversation!</Text>}
-                      {comments.map(c => (
+                      {comments.map((c: any) => (
                         <View key={c.id} style={s.commentItem}>
                           <View style={s.commentDot} />
                           <View style={{ flex: 1 }}>
-                            <Text style={s.commentAuthor}>{c.users?.full_name || 'Farmer'}</Text>
+                            <Text style={s.commentAuthor}>{(c.users as any)?.full_name || 'Farmer'}</Text>
                             <Text style={s.commentText}>{c.content}</Text>
                             <Text style={s.commentTime}>{formatTime(c.created_at)}</Text>
                           </View>
@@ -826,17 +832,11 @@ export default function AquaConnectScreen() {
               </>
             )}
 
-            {liveAlerts.length === 0 && loading && (
-              <View style={s.noDataCard}>
-                <ActivityIndicator size="small" color={MODULE_COLOR} />
-                <Text style={[s.noDataTitle, { marginTop: theme.spacing.sm }]}>Fetching weather data from 8 AP districts...</Text>
-              </View>
-            )}
-            {liveAlerts.length === 0 && !loading && (
+            {liveAlerts.length === 0 && (
               <View style={s.noDataCard}>
                 <Text style={s.noDataIcon}>📡</Text>
-                <Text style={s.noDataTitle}>No alerts right now</Text>
-                <Text style={s.noDataDesc}>All clear across AP districts. Pull down to refresh.</Text>
+                <Text style={s.noDataTitle}>Loading live alerts...</Text>
+                <Text style={s.noDataDesc}>Fetching weather data from 8 AP districts</Text>
               </View>
             )}
 
