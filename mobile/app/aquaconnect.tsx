@@ -470,41 +470,99 @@ export default function AquaConnectScreen() {
         {/* MEMBERS TAB */}
         {tab === 'members' && (
           <>
-            <Text style={s.sectionTitle}>Cooperative Members</Text>
-            <Text style={s.sectionSub}>{members.length} members in Krishna Delta Fish Farmers</Text>
-            {members.length === 0 && <Text style={s.emptyTab}>No members found</Text>}
-            {members.map((m, i) => {
-              const profile = m.profiles?.[0];
-              const speciesLabel: Record<string, string> = { shrimp: '🦐 Shrimp', prawn: '🦞 Prawn', fish: '🐟 Fish' };
-              return (
-                <TouchableOpacity key={m.id || i} style={s.memberCard} activeOpacity={0.7}>
-                  <View style={[s.avatar, { backgroundColor: MODULE_COLOR + '20' }]}>
-                    <Text style={[s.avatarText, { color: MODULE_COLOR }]}>{m.full_name?.charAt(0) || '?'}</Text>
+            {/* Cooperative Header */}
+            <View style={s.coopHeaderCard}>
+              <View style={s.coopHeaderTop}>
+                <View style={[s.coopLogo, { backgroundColor: MODULE_COLOR }]}>
+                  <Text style={{ fontSize: 22 }}>🐟</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.coopName}>Krishna Delta Fish Farmers</Text>
+                  <Text style={s.coopDist}>Krishna District, Andhra Pradesh</Text>
+                  <Text style={s.coopReg}>Reg. No: KDF/2024/AP-0847</Text>
+                </View>
+              </View>
+              <View style={s.coopStats}>
+                <View style={s.coopStatItem}>
+                  <Text style={s.coopStatNum}>{members.length}</Text>
+                  <Text style={s.coopStatLabel}>Members</Text>
+                </View>
+                <View style={s.coopStatDivider} />
+                <View style={s.coopStatItem}>
+                  <Text style={s.coopStatNum}>{members.reduce((sum, m) => sum + (m.profiles?.[0]?.total_pond_area || 0), 0).toFixed(1)}</Text>
+                  <Text style={s.coopStatLabel}>Total Acres</Text>
+                </View>
+                <View style={s.coopStatDivider} />
+                <View style={s.coopStatItem}>
+                  <Text style={s.coopStatNum}>{new Set(members.map(m => m.profiles?.[0]?.district).filter(Boolean)).size}</Text>
+                  <Text style={s.coopStatLabel}>Districts</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* District Grouped Members */}
+            {(() => {
+              const speciesEmoji: Record<string, string> = { shrimp: '🦐', prawn: '🦞', fish: '🐟' };
+              const speciesLabel: Record<string, string> = { shrimp: 'Shrimp', prawn: 'Prawn', fish: 'Fish' };
+              const grouped: Record<string, Member[]> = {};
+              members.forEach(m => {
+                const dist = m.profiles?.[0]?.district || 'Other';
+                if (!grouped[dist]) grouped[dist] = [];
+                grouped[dist].push(m);
+              });
+              const sortedDistricts = Object.keys(grouped).sort();
+
+              if (members.length === 0) return <Text style={s.emptyTab}>No members found. Run the seed SQL in Supabase.</Text>;
+
+              return sortedDistricts.map(district => (
+                <View key={district}>
+                  <View style={s.districtHeader}>
+                    <Text style={s.districtHeaderText}>📍 {district}</Text>
+                    <Text style={s.districtCount}>{grouped[district].length} members</Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Text style={s.memberName}>{m.full_name}</Text>
-                      {m.role === 'cooperative' && (
-                        <View style={[s.roleBadge, { backgroundColor: theme.colors.amber + '20' }]}>
-                          <Text style={[s.roleBadgeText, { color: theme.colors.amber }]}>Leader</Text>
+                  {grouped[district].map((m, i) => {
+                    const profile = m.profiles?.[0];
+                    return (
+                      <View key={m.id || i} style={s.memberDirCard}>
+                        <View style={s.memberDirTop}>
+                          <View style={[s.memberDirAvatar, { backgroundColor: MODULE_COLOR }]}>
+                            <Text style={s.memberDirAvatarText}>{m.full_name?.charAt(0) || '?'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <Text style={s.memberDirName}>{m.full_name}</Text>
+                              {m.role === 'cooperative' && (
+                                <View style={[s.leaderBadge]}>
+                                  <Text style={s.leaderBadgeText}>⭐ Leader</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={s.memberDirPhone}>{m.phone}</Text>
+                          </View>
+                          <TouchableOpacity style={[s.memberDirCall, { backgroundColor: MODULE_COLOR }]} onPress={() => Linking.openURL(`tel:${m.phone}`)}>
+                            <Text style={s.memberDirCallText}>📞 Call</Text>
+                          </TouchableOpacity>
                         </View>
-                      )}
-                    </View>
-                    <Text style={s.memberPhone}>📱 {m.phone}</Text>
-                    {profile && (
-                      <View style={s.memberDetails}>
-                        {profile.village && <Text style={s.memberDetail}>📍 {profile.village}, {profile.district}</Text>}
-                        {profile.primary_species && <Text style={s.memberDetail}>{speciesLabel[profile.primary_species] || profile.primary_species} • {profile.total_pond_area} acres</Text>}
-                        {profile.years_experience && <Text style={s.memberDetail}>🕐 {profile.years_experience} years experience</Text>}
+                        {profile && (
+                          <View style={s.memberDirDetails}>
+                            <View style={s.memberDirDetailRow}>
+                              <Text style={s.memberDirDetailItem}>📍 {profile.village || '--'}</Text>
+                            </View>
+                            <View style={s.memberDirDetailRow}>
+                              <Text style={s.memberDirDetailItem}>
+                                {speciesEmoji[profile.primary_species || ''] || '🐟'} {speciesLabel[profile.primary_species || ''] || profile.primary_species || '--'}
+                              </Text>
+                              <Text style={s.memberDirDetailItem}>🏞 {profile.total_pond_area || '--'} acres</Text>
+                              <Text style={s.memberDirDetailItem}>🕐 {profile.years_experience || '--'} yrs</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
-                  <TouchableOpacity style={[s.callBtn, { backgroundColor: MODULE_COLOR }]} onPress={() => Linking.openURL(`tel:${m.phone}`)}>
-                    <Text style={s.callText}>Call</Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              );
-            })}
+                    );
+                  })}
+                </View>
+              ));
+            })()}
           </>
         )}
 
@@ -625,18 +683,34 @@ const s = StyleSheet.create({
   trendBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.borderRadius.sm, marginTop: 4 },
   trendText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
 
-  // Members
-  memberCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
-  avatar: { width: theme.layout.avatarMd, height: theme.layout.avatarMd, borderRadius: theme.layout.avatarMd / 2, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm + 4 },
-  avatarText: { fontSize: theme.fontSize.lg, fontWeight: '700' },
-  memberName: { fontSize: 14, fontWeight: '600', color: theme.colors.text },
-  memberPhone: { fontSize: 12, color: theme.colors.textLight, marginTop: 1 },
-  memberDetails: { marginTop: 4, gap: 2 },
-  memberDetail: { fontSize: 11, color: theme.colors.textLight, lineHeight: 16 },
-  roleBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  roleBadgeText: { fontSize: 10, fontWeight: '600' },
-  callBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
-  callText: { color: theme.colors.white, fontSize: 12, fontWeight: '600' },
+  // Members - Cooperative Directory
+  coopHeaderCard: { backgroundColor: MODULE_COLOR + '08', borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: MODULE_COLOR + '30' },
+  coopHeaderTop: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
+  coopLogo: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm + 4 },
+  coopName: { fontSize: 15, fontWeight: '700', color: theme.colors.text },
+  coopDist: { fontSize: 12, color: theme.colors.textLight, marginTop: 1 },
+  coopReg: { fontSize: 10, color: MODULE_COLOR, marginTop: 2, fontWeight: '600' },
+  coopStats: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: theme.spacing.sm },
+  coopStatItem: { alignItems: 'center', flex: 1 },
+  coopStatNum: { fontSize: 18, fontWeight: '800', color: MODULE_COLOR },
+  coopStatLabel: { fontSize: 10, color: theme.colors.textLight, marginTop: 2 },
+  coopStatDivider: { width: 1, backgroundColor: theme.colors.border, marginVertical: 2 },
+  districtHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: theme.spacing.sm, paddingHorizontal: 2, marginBottom: theme.spacing.xs },
+  districtHeaderText: { fontSize: 13, fontWeight: '700', color: theme.colors.text, textTransform: 'uppercase', letterSpacing: 0.5 },
+  districtCount: { fontSize: 11, color: theme.colors.textLight },
+  memberDirCard: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
+  memberDirTop: { flexDirection: 'row', alignItems: 'center' },
+  memberDirAvatar: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginRight: theme.spacing.sm },
+  memberDirAvatarText: { fontSize: 18, fontWeight: '700', color: theme.colors.white },
+  memberDirName: { fontSize: 14, fontWeight: '700', color: theme.colors.text },
+  leaderBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: theme.colors.amber + '20' },
+  leaderBadgeText: { fontSize: 10, fontWeight: '600', color: theme.colors.amber },
+  memberDirPhone: { fontSize: 12, color: theme.colors.textLight, marginTop: 2, fontWeight: '500' },
+  memberDirCall: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.sm },
+  memberDirCallText: { color: theme.colors.white, fontSize: 11, fontWeight: '600' },
+  memberDirDetails: { marginTop: theme.spacing.sm, paddingTop: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  memberDirDetailRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 3 },
+  memberDirDetailItem: { fontSize: 12, color: theme.colors.textLight },
 
   // Alerts
   alertCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },
