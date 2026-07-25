@@ -33,59 +33,28 @@ export default function AquaConnectScreen() {
 
   const [debug, setDebug] = useState('');
 
-  const joinCooperative = async (coopId: string, userId: string) => {
-    const { error: userErr } = await supabase.from('users').upsert({ id: userId, phone: `dev-${userId.slice(0, 8)}`, full_name: 'Dev User' }, { onConflict: 'id' });
-    if (userErr) { setDebug('user upsert: ' + userErr.message); return; }
-    const { error: memberErr } = await supabase.from('cooperative_members').insert({ cooperative_id: coopId, user_id: userId });
-    if (memberErr) { setDebug('member insert: ' + memberErr.message); return; }
-  };
-
   const fetchData = useCallback(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setDebug('no user'); return; }
-      setDebug('user: ' + user.id.slice(0, 8));
+      // Fetch first cooperative directly (no auth needed - RLS disabled)
+      const { data: coops, error: coopErr } = await supabase
+        .from('cooperatives')
+        .select('id, name, district, member_count')
+        .limit(1);
 
-      // Check membership
-      let { data: membership, error: memErr } = await supabase
-        .from('cooperative_members')
-        .select('cooperative_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (coopErr) { setDebug('coops err: ' + coopErr.message); setLoading(false); return; }
+      if (!coops || coops.length === 0) { setDebug('no cooperatives found'); setLoading(false); return; }
 
-      if (memErr) { setDebug('coop query: ' + memErr.message); return; }
-      setDebug('membership: ' + JSON.stringify(membership));
-
-      // Auto-join first available cooperative if not a member
-      if (!membership) {
-        const { data: coops, error: coopErr } = await supabase.from('cooperatives').select('id').limit(1);
-        if (coopErr) { setDebug('coop list: ' + coopErr.message); return; }
-        setDebug('coops found: ' + (coops?.length || 0));
-        if (coops && coops.length > 0) {
-          await joinCooperative(coops[0].id, user.id);
-          membership = { cooperative_id: coops[0].id };
-        }
-      }
-
-      if (!membership) {
-        setIsMember(false);
-        setCooperative(null);
-        setAlerts([]);
-        setMembers([]);
-        return;
-      }
-
+      const coop = coops[0];
+      setCooperative(coop);
       setIsMember(true);
-      const coopId = membership.cooperative_id;
+      setDebug('coop: ' + coop.name);
 
-      // Fetch cooperative, alerts, members in parallel
-      const [coopRes, alertsRes, membersRes] = await Promise.all([
-        supabase.from('cooperatives').select('id, name, district, member_count').eq('id', coopId).single(),
-        supabase.from('cooperative_alerts').select('*').eq('cooperative_id', coopId).order('created_at', { ascending: false }).limit(20),
-        supabase.from('cooperative_members').select('user_id, joined_at, users(full_name, phone)').eq('cooperative_id', coopId),
+      // Fetch alerts and members
+      const [alertsRes, membersRes] = await Promise.all([
+        supabase.from('cooperative_alerts').select('*').eq('cooperative_id', coop.id).order('created_at', { ascending: false }).limit(20),
+        supabase.from('cooperative_members').select('user_id, joined_at').eq('cooperative_id', coop.id),
       ]);
 
-      if (coopRes.data) setCooperative(coopRes.data);
       if (alertsRes.data) setAlerts(alertsRes.data as Alert[]);
       if (membersRes.data) setMembers(membersRes.data as unknown as Member[]);
     } catch (err) {
@@ -101,16 +70,9 @@ export default function AquaConnectScreen() {
   const onRefresh = () => { setRefreshing(true); fetchData(); };
 
   const getStats = () => {
-    if (!isMember || !cooperative) {
-      return [
-        { icon: '👥', value: '--', label: 'Members' },
-        { icon: '🐟', value: '--', label: 'Total Ponds' },
-        { icon: '📊', value: '--', label: 'Avg Revenue' },
-      ];
-    }
     return [
-      { icon: '👥', value: String(members.length || cooperative.member_count), label: 'Members' },
-      { icon: '🐟', value: String(members.length * 3), label: 'Total Ponds' },
+      { icon: '👥', value: String(members.length || cooperative?.member_count || 0), label: 'Members' },
+      { icon: '🐟', value: String(members.length * 3 || 0), label: 'Total Ponds' },
       { icon: '📊', value: '₹2.4L', label: 'Avg Revenue' },
     ];
   };
@@ -200,10 +162,10 @@ export default function AquaConnectScreen() {
             {tab === 'members' && members.map((m, i) => (
               <View key={i} style={s.memberCard}>
                 <View style={[s.avatar, { backgroundColor: theme.colors.green + '20' }]}>
-                  <Text style={s.avatarText}>{m.users?.full_name?.charAt(0) || '?'}</Text>
+                  <Text style={s.avatarText}>{(i + 1)}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.memberName}>{m.users?.full_name || 'Unknown'}</Text>
+                  <Text style={s.memberName}>Member #{i + 1}</Text>
                   <Text style={s.memberInfo}>Joined {new Date(m.joined_at).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}</Text>
                 </View>
                 <View style={[s.dot, { backgroundColor: theme.colors.success }]} />

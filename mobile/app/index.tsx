@@ -11,15 +11,9 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
-      // Always try anonymous sign-in to ensure valid session
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        const { error } = await supabase.auth.signInAnonymously();
-        if (error) console.warn('Anonymous sign-in failed:', error.message);
-      }
+      const { data: { user }, error } = await supabase.auth.signInAnonymously();
+      console.log('Anonymous sign-in:', user ? 'OK ' + user.id.slice(0, 8) : 'FAILED', error?.message || '');
       await new Promise(r => setTimeout(r, 2000));
-
-      // TODO: Re-enable auth check before final submission
       router.replace('/(tabs)/home');
     };
     init();
