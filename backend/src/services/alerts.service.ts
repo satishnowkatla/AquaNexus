@@ -81,8 +81,8 @@ function generateFeedAdvice(temp: number, weatherCode: number, rainfall: number)
   return 'Normal conditions — maintain regular feeding schedule.';
 }
 
-export async function generateDailyAlerts(): Promise<DailyAlert[]> {
-  if (alertsCache && (Date.now() - alertsCache.fetchedAt) < CACHE_TTL) {
+export async function generateDailyAlerts(fresh = false): Promise<DailyAlert[]> {
+  if (!fresh && alertsCache && (Date.now() - alertsCache.fetchedAt) < CACHE_TTL) {
     return alertsCache.data;
   }
 

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, KeyboardAvoidingVi
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
-import { supabase } from '../../utils/supabase';
+import { authApi } from '../../utils/api';
 
 export default function Login() {
   const router = useRouter();
@@ -14,9 +14,9 @@ export default function Login() {
     if (phone.length !== 10) return;
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` });
-      if (error) throw error;
-      router.push({ pathname: '/auth/otp-verify', params: { phone } });
+      const data = await authApi.sendOtp(phone);
+      // Demo mode: no real SMS, so show the OTP to the user
+      router.push({ pathname: '/auth/otp-verify', params: { phone, demoOtp: data.otp } });
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to send OTP. Try again.');
     } finally {

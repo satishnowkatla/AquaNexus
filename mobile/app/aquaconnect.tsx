@@ -91,13 +91,15 @@ export default function AquaConnectScreen() {
   const [expandedFarmer, setExpandedFarmer] = useState<string | null>(null);
   const [feedPrices, setFeedPrices] = useState<FeedIngredient[]>([]);
   const [liveAlerts, setLiveAlerts] = useState<Alert[]>([]);
+  const [alertsStatus, setAlertsStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [feedPricesStatus, setFeedPricesStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [alertDistrict, setAlertDistrict] = useState<string>('all');
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [dataSource, setDataSource] = useState<string>('');
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [commenting, setCommenting] = useState<string | null>(null);
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (fresh = false) => {
     try {
       // Fetch posts with author names (try join first, fallback to plain)
       let postList: Post[] = [];
@@ -124,7 +126,7 @@ export default function AquaConnectScreen() {
       let gotLivePrices = false;
       try {
         const [liveRes, marketsRes] = await Promise.all([
-          fetch(`${API_URL}/api/market/prices`, { signal: AbortSignal.timeout(25000) }),
+          fetch(`${API_URL}/api/market/prices${fresh ? '?fresh=1' : ''}`, { signal: AbortSignal.timeout(25000) }),
           fetch(`${API_URL}/api/market/markets`, { signal: AbortSignal.timeout(10000) }).then(r => r.json()).catch(() => null),
         ]);
         if (marketsRes?.success && marketsRes.data) setMarketList(marketsRes.data);
@@ -178,15 +180,32 @@ export default function AquaConnectScreen() {
       }
 
       // Fetch live alerts and feed prices from backend
+      setAlertsStatus('loading');
+      setFeedPricesStatus('loading');
       try {
         const [alertsRes, feedRes] = await Promise.all([
-          fetch(`${API_URL}/api/alerts/daily`, { signal: AbortSignal.timeout(15000) }).then(r => r.json()).catch(() => null),
+          fetch(`${API_URL}/api/alerts/daily${fresh ? '?fresh=1' : ''}`, { signal: AbortSignal.timeout(20000) }).then(r => r.json()).catch(() => null),
           fetch(`${API_URL}/api/alerts/feed-prices`, { signal: AbortSignal.timeout(10000) }).then(r => r.json()).catch(() => null),
         ]);
-        if (alertsRes?.success && alertsRes.data) setLiveAlerts(alertsRes.data);
-        if (feedRes?.success && feedRes.data) setFeedPrices(feedRes.data);
+        if (alertsRes?.success && alertsRes.data) {
+          setLiveAlerts(alertsRes.data);
+          setAlertsStatus('loaded');
+        } else {
+          setLiveAlerts([]);
+          setAlertsStatus('error');
+        }
+        if (feedRes?.success && feedRes.data) {
+          setFeedPrices(feedRes.data);
+          setFeedPricesStatus('loaded');
+        } else {
+          setFeedPrices([]);
+          setFeedPricesStatus('error');
+        }
       } catch {
-        // Backend unavailable for alerts/feed
+        setLiveAlerts([]);
+        setFeedPrices([]);
+        setAlertsStatus('error');
+        setFeedPricesStatus('error');
       }
     } catch (err) {
       console.warn('AquaConnect error:', err);
@@ -207,7 +226,7 @@ export default function AquaConnectScreen() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
-  const onRefresh = () => { setRefreshing(true); fetchData(); };
+  const onRefresh = () => { setRefreshing(true); fetchData(true); };
 
   const handlePost = async () => {
     if (!newPostText.trim()) return;
@@ -697,9 +716,14 @@ export default function AquaConnectScreen() {
                               <Text style={s.farmerLocation}>📍 {profile.village}{profile.pincode ? `, ${profile.pincode}` : ''}</Text>
                             )}
                           </View>
-                          <TouchableOpacity style={[s.memberDirCall, { backgroundColor: MODULE_COLOR }]} onPress={(e) => { e.stopPropagation?.(); Linking.openURL(`tel:${m.phone}`); }}>
-                            <Text style={s.memberDirCallText}>📞</Text>
-                          </TouchableOpacity>
+                          <View style={s.memberActions}>
+                            <TouchableOpacity style={[s.memberDirChat, { borderColor: MODULE_COLOR }]} onPress={(e) => { e.stopPropagation?.(); router.push({ pathname: '/chat', params: { id: m.id, name: m.full_name || 'Farmer' } }); }}>
+                              <Text style={[s.memberDirChatText, { color: MODULE_COLOR }]}>💬</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[s.memberDirCall, { backgroundColor: MODULE_COLOR }]} onPress={(e) => { e.stopPropagation?.(); Linking.openURL(`tel:${m.phone}`); }}>
+                              <Text style={s.memberDirCallText}>📞</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
 
                         {/* Quick Stats Row */}
@@ -834,9 +858,22 @@ export default function AquaConnectScreen() {
 
             {liveAlerts.length === 0 && (
               <View style={s.noDataCard}>
-                <Text style={s.noDataIcon}>📡</Text>
-                <Text style={s.noDataTitle}>Loading live alerts...</Text>
-                <Text style={s.noDataDesc}>Fetching weather data from 8 AP districts</Text>
+                <Text style={s.noDataIcon}>{alertsStatus === 'loading' ? '📡' : alertsStatus === 'error' ? '⚠️' : '🌤'}</Text>
+                <Text style={s.noDataTitle}>
+                  {alertsStatus === 'loading' ? 'Loading live alerts...' : alertsStatus === 'error' ? 'Live alerts unavailable' : 'No live alerts right now'}
+                </Text>
+                <Text style={s.noDataDesc}>
+                  {alertsStatus === 'loading'
+                    ? 'Fetching weather data from 8 AP districts'
+                    : alertsStatus === 'error'
+                      ? 'Could not reach the alerts service. Pull down to retry, or check your internet connection.'
+                      : 'Weather conditions are normal across AP today. Pull down to refresh.'}
+                </Text>
+                {alertsStatus === 'error' && (
+                  <TouchableOpacity style={[s.clearFiltersBtn, { backgroundColor: MODULE_COLOR }]} onPress={onRefresh}>
+                    <Text style={s.clearFiltersBtnText}>↻ Retry</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -858,6 +895,13 @@ export default function AquaConnectScreen() {
             )}
 
             {/* FEED PRICES SECTION */}
+            {feedPrices.length === 0 && feedPricesStatus === 'error' && (
+              <View style={[s.noDataCard, { marginTop: theme.spacing.md }]}>
+                <Text style={s.noDataIcon}>💰</Text>
+                <Text style={s.noDataTitle}>Feed prices unavailable</Text>
+                <Text style={s.noDataDesc}>Could not load today's feed rates. Pull down to retry.</Text>
+              </View>
+            )}
             {feedPrices.length > 0 && (
               <>
                 <Text style={[s.sectionTitle, { marginTop: theme.spacing.md }]}>💰 Feed Ingredient Prices</Text>
@@ -1039,6 +1083,9 @@ const s = StyleSheet.create({
   expandHintText: { fontSize: 11, color: MODULE_COLOR, fontWeight: '500' },
   memberDirCall: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.sm },
   memberDirCallText: { color: theme.colors.white, fontSize: 16, fontWeight: '600' },
+  memberActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  memberDirChat: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: theme.borderRadius.sm, borderWidth: 1 },
+  memberDirChatText: { fontSize: 16, fontWeight: '600' },
 
   // Alerts
   alertCard: { flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.md, padding: theme.spacing.sm + 6, marginBottom: theme.spacing.sm, borderWidth: 1, borderColor: theme.colors.border },

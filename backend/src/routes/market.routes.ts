@@ -5,9 +5,11 @@ const router = Router();
 
 // Get fish/shrimp market prices for Andhra Pradesh
 // Query params: ?market_id=<number> to filter by specific market
+//               ?fresh=1 to bypass the cache and fetch live from NFDB
 router.get('/prices', async (req, res: Response) => {
   try {
-    const prices = await getFishPricesInAP();
+    const fresh = req.query.fresh === '1';
+    const prices = await getFishPricesInAP(fresh);
     const marketId = req.query.market_id ? Number(req.query.market_id) : null;
     let filtered = prices;
     if (marketId) {

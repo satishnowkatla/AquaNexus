@@ -26,6 +26,22 @@ export const SPECIES_LIST = [
   'Others',
 ];
 
+export const AP_DISTRICTS = [
+  'Srikakulam',
+  'Vizianagaram',
+  'Visakhapatnam',
+  'East Godavari',
+  'West Godavari',
+  'Krishna',
+  'Guntur',
+  'Prakasam',
+  'Nellore',
+  'Chittoor',
+  'Kadapa',
+  'Anantapur',
+  'Kurnool',
+];
+
 export const STORAGE_KEYS = {
   AUTH_TOKEN: 'auth_token',
   USER_DATA: 'user_data',

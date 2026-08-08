@@ -12,6 +12,10 @@ export default function RootLayout() {
         <Stack.Screen name="auth/otp-verify" />
         <Stack.Screen name="auth/profile-setup" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="edit-profile" />
+        <Stack.Screen name="(modals)/chat" />
+        <Stack.Screen name="(modals)/pond-detail" />
+        <Stack.Screen name="(modals)/diagnosis-result" />
         <Stack.Screen name="aquadoc" />
         <Stack.Screen name="aquavoice" />
         <Stack.Screen name="aquaadvisor" />

@@ -3,20 +3,38 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '../utils/theme';
 import { supabase } from '../utils/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../utils/constants';
 
 export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
     const init = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          await supabase.auth.signInAnonymously();
+      const { data: { session } } = await supabase.auth.getSession();
+      const onboarded = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE);
+
+      if (session && !session.user.is_anonymous) {
+        const userId = session.user.id;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (profile) {
+          router.replace('/(tabs)/home');
+          return;
         }
-      } catch {}
-      await new Promise(r => setTimeout(r, 2000));
-      router.replace('/(tabs)/home');
+        router.replace({ pathname: '/auth/profile-setup', params: { phone: session.user.phone || '' } });
+        return;
+      }
+
+      if (session?.user.is_anonymous) {
+        await supabase.auth.signOut();
+      }
+
+      router.replace(onboarded ? '/auth/login' : '/onboarding');
     };
     init();
   }, []);
