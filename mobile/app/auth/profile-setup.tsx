@@ -24,9 +24,11 @@ export default function ProfileSetup() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not logged in');
 
+      const localPhone = String(phone).replace(/\D/g, '').slice(-10);
+
       const { error: userError } = await supabase
         .from('users')
-        .upsert({ id: user.id, phone, full_name: name }, { onConflict: 'id' });
+        .upsert({ id: user.id, phone: localPhone, full_name: name }, { onConflict: 'id' });
       if (userError) throw userError;
 
       const { error: profileError } = await supabase

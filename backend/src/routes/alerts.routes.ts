@@ -5,9 +5,11 @@ import { getFeedPrices, getFeedCostEstimate } from '../services/feed.service';
 const router = Router();
 
 // GET /api/alerts/daily — real-time weather + disease + feeding alerts
-router.get('/daily', async (_req, res: Response) => {
+// Query params: ?fresh=1 to bypass cache and regenerate live alerts
+router.get('/daily', async (req, res: Response) => {
   try {
-    const alerts = await generateDailyAlerts();
+    const fresh = req.query.fresh === '1';
+    const alerts = await generateDailyAlerts(fresh);
     res.json({
       success: true,
       data: alerts,

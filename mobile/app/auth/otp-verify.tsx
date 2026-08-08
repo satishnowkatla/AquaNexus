@@ -4,11 +4,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../utils/theme';
 import { supabase } from '../../utils/supabase';
+import { authApi, tokenStore } from '../../utils/api';
 
 export default function OTPVerify() {
   const router = useRouter();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
-  const [otp, setOtp] = useState('');
+  const { phone, demoOtp } = useLocalSearchParams<{ phone: string; demoOtp?: string }>();
+  const [otp, setOtp] = useState(demoOtp || '');
   const [loading, setLoading] = useState(false);
 
   const maskedPhone = phone ? `+91 ${phone.slice(0, 5)} ${phone.slice(5)}` : '+91 XXXXX XXXXX';
@@ -17,17 +18,16 @@ export default function OTPVerify() {
     if (otp.length !== 6 || !phone) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: `+91${phone}`,
-        token: otp,
-        type: 'sms',
-      });
+      const data = await authApi.verifyOtp(phone, otp);
+      await tokenStore.save(data.token);
+
+      const { error } = await supabase.auth.signInWithPassword({ phone: data.phone, password: data.password });
       if (error) throw error;
 
-      if (data.session) {
-        router.replace('/(tabs)/home');
-      } else {
+      if (data.isNewUser) {
         router.replace({ pathname: '/auth/profile-setup', params: { phone } });
+      } else {
+        router.replace('/(tabs)/home');
       }
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Invalid OTP. Try again.');
@@ -39,9 +39,9 @@ export default function OTPVerify() {
   const handleResend = async () => {
     if (!phone) return;
     try {
-      const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` });
-      if (error) throw error;
-      Alert.alert('OTP Sent', 'A new OTP has been sent to your number.');
+      const data = await authApi.sendOtp(phone);
+      setOtp(data.otp);
+      Alert.alert('OTP Sent', `Your new OTP is ${data.otp}`);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to resend OTP.');
     }
@@ -68,6 +68,14 @@ export default function OTPVerify() {
             <Text style={s.subtitle}>
               Enter the 6-digit code sent to{'\n'}{maskedPhone}
             </Text>
+            {demoOtp && (
+              <View style={s.demoBanner}>
+                <Text style={s.demoBannerText}>
+                  🧪 Demo mode — Your OTP is {'\n'}
+                  <Text style={s.demoOtp}>{demoOtp}</Text>
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={s.bottom}>
@@ -141,6 +149,27 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 22,
+  },
+  demoBanner: {
+    marginTop: 16,
+    backgroundColor: theme.colors.lightAmber,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.amber + '40',
+  },
+  demoBannerText: {
+    fontSize: 13,
+    color: theme.colors.text,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  demoOtp: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: theme.colors.amber,
+    letterSpacing: 4,
   },
   bottom: {},
   otpInput: {

@@ -141,8 +141,8 @@ async function fetchFromNfdb(): Promise<MarketPrice[]> {
   return all;
 }
 
-export async function getFishPricesInAP(): Promise<MarketPrice[]> {
-  if (cache && (Date.now() - cache.fetchedAt) < CACHE_TTL) {
+export async function getFishPricesInAP(fresh = false): Promise<MarketPrice[]> {
+  if (!fresh && cache && (Date.now() - cache.fetchedAt) < CACHE_TTL) {
     return cache.data;
   }
   try {

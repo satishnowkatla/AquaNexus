@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -12,12 +12,90 @@ export default function SettingsScreen() {
   const [notif, setNotif] = useState(true);
   const [dark, setDark] = useState(false);
   const [lang, setLang] = useState<'en' | 'te' | 'hi'>('en');
+  const [profile, setProfile] = useState({ name: 'Ravi Kumar', phone: '+91 98765 43210' });
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('users')
+          .select('full_name, phone')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (data) {
+          setProfile(p => ({
+            name: data.full_name || p.name,
+            phone: data.phone ? '+91 ' + data.phone : p.phone,
+          }));
+        }
+      } catch (e) {
+        // keep default profile
+      }
+    };
+    load();
+  }, []);
+
+  const initials = profile.name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase();
 
   const logout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => { await supabase.auth.signOut(); router.replace('/onboarding'); } },
+      { text: 'Logout', style: 'destructive', onPress: async () => { await supabase.auth.signOut(); router.replace('/auth/login'); } },
     ]);
+  };
+
+  const showPonds = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('My Ponds', 'You are not signed in.'); return; }
+      const { data, error } = await supabase
+        .from('ponds')
+        .select('name, area_acres, species, status')
+        .eq('farmer_id', user.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        Alert.alert('My Ponds', 'No ponds yet. Add your first pond in Edit Profile.');
+        return;
+      }
+      const lines = data.map((p, i) => `${i + 1}. ${p.name || 'Pond ' + (i + 1)} — ${p.area_acres} acres, ${p.species} (${p.status})`);
+      Alert.alert(`My Ponds (${data.length})`, lines.join('\n'));
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not load ponds.');
+    }
+  };
+
+  const showTransactions = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { Alert.alert('Transactions', 'You are not signed in.'); return; }
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('type, category, amount, transaction_date')
+        .eq('farmer_id', user.id)
+        .order('transaction_date', { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        Alert.alert('Transactions', 'No transactions yet. Try AquaVoice to log income and expense.');
+        return;
+      }
+      let income = 0;
+      let expense = 0;
+      data.forEach(t => { if (t.type === 'income') income += t.amount; else expense += t.amount; });
+      const recent = data.slice(0, 5).map(t => `${t.transaction_date || '—'} · ${t.category || t.type}: ₹${t.amount}`).join('\n');
+      Alert.alert('Transactions', `Income: ₹${income}\nExpense: ₹${expense}\n\n${recent}`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not load transactions.');
+    }
   };
 
   return (
@@ -32,17 +110,19 @@ export default function SettingsScreen() {
 
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={s.profile}>
-          <View style={s.avatar}><Text style={s.avatarText}>RK</Text></View>
-          <Text style={s.name}>Ravi Kumar</Text>
-          <Text style={s.phone}>+91 98765 43210</Text>
-          <TouchableOpacity style={s.editBtn}><Text style={s.editText}>Edit Profile</Text></TouchableOpacity>
+          <View style={s.avatar}><Text style={s.avatarText}>{initials || 'RK'}</Text></View>
+          <Text style={s.name}>{profile.name}</Text>
+          <Text style={s.phone}>{profile.phone}</Text>
+          <TouchableOpacity style={s.editBtn} onPress={() => router.push('/edit-profile')}>
+            <Text style={s.editText}>Edit Profile</Text>
+          </TouchableOpacity>
         </View>
 
         <Text style={s.groupLabel}>Account</Text>
         <View style={s.group}>
-          <Row icon="👤" text="Personal Information" />
-          <Row icon="📍" text="My Ponds" />
-          <Row icon="📊" text="Transaction History" />
+          <Row icon="👤" text="Personal Information" onPress={() => router.push('/edit-profile')} />
+          <Row icon="📍" text="My Ponds" onPress={showPonds} />
+          <Row icon="📊" text="Transaction History" onPress={showTransactions} />
         </View>
 
         <Text style={s.groupLabel}>Preferences</Text>
@@ -72,7 +152,7 @@ export default function SettingsScreen() {
 
         <Text style={s.groupLabel}>About</Text>
         <View style={s.group}>
-          <Row icon="ℹ️" text="About AquaNexus" />
+          <Row icon="ℹ️" text="About AquaNexus" onPress={() => Alert.alert('About AquaNexus', `${APP_TAGLINE}\n\nVersion ${APP_VERSION}\nAI-powered tools for disease diagnosis, farming advice, and more.`)} />
           <Row icon="📋" text="Version" value={APP_VERSION} />
         </View>
 
@@ -86,13 +166,18 @@ export default function SettingsScreen() {
   );
 }
 
-function Row({ icon, text, value }: { icon: string; text: string; value?: string }) {
+function Row({ icon, text, value, onPress }: { icon: string; text: string; value?: string; onPress?: () => void }) {
   return (
-    <View style={rS.row}>
+    <TouchableOpacity
+      style={rS.row}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={0.6}
+    >
       <Text style={rS.icon}>{icon}</Text>
       <Text style={rS.text}>{text}</Text>
       {value ? <Text style={rS.value}>{value}</Text> : <Text style={rS.arrow}>›</Text>}
-    </View>
+    </TouchableOpacity>
   );
 }
 

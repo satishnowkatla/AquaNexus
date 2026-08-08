@@ -11,15 +11,30 @@ export default function Index() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        const { data, error } = await supabase.auth.signInAnonymously();
-        console.log('Anonymous sign-in:', data?.user ? 'OK ' + data.user.id.slice(0, 8) : 'FAILED', error?.message || '');
-      } else {
-        console.log('Existing user found:', user.id.slice(0, 8));
+      const { data: { session } } = await supabase.auth.getSession();
+      const onboarded = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_DONE);
+
+      if (session && !session.user.is_anonymous) {
+        const userId = session.user.id;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (profile) {
+          router.replace('/(tabs)/home');
+          return;
+        }
+        router.replace({ pathname: '/auth/profile-setup', params: { phone: session.user.phone || '' } });
+        return;
       }
-      await new Promise(r => setTimeout(r, 2000));
-      router.replace('/(tabs)/home');
+
+      if (session?.user.is_anonymous) {
+        await supabase.auth.signOut();
+      }
+
+      router.replace(onboarded ? '/auth/login' : '/onboarding');
     };
     init();
   }, []);
